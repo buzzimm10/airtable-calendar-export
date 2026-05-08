@@ -1,7 +1,12 @@
 .venv/
+__pycache__/
+*.pyc
 .env
 output/
 __pycache__/
+logs/
+.idea/
+.vscode/
 
 # Ignore the sample data file
 data/sample_airtable.json

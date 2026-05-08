@@ -50,3 +50,13 @@ OVERVIEW_WEEK_LAYOUT = {
     4: {"header_row": 70, "date_row": 71, "event_rows": (72, 73), "base_row": 74, "end_row": 90},
     5: {"header_row": 92, "date_row": 93, "event_rows": (94, 95), "base_row": 96, "end_row": 112},
 }
+
+BASE_DAY_TEMPLATE = {
+    "Monday": {"programming": 1, "mediaplanning": 1, "uk": 1},
+    "Tuesday": {"programming": 1, "mediaplanning": 1, "uk": 1},
+    "Wednesday": {"programming": 1, "mediaplanning": 1, "uk": 1},
+    "Thursday": {"programming": 1, "mediaplanning": 1, "uk": 1},
+    "Friday": {"programming": 2, "mediaplanning": 1, "uk": 1},
+    "Saturday": {"programming": 1, "mediaplanning": 1, "uk": 1},
+    "Sunday": {"programming": 2, "mediaplanning": 1, "uk": 1},
+}

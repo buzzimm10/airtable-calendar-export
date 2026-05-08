@@ -10,7 +10,7 @@ SRC_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
-from services.planner_service import run_planner
+from services.planner_service import load_and_filter_records
 
 
 st.set_page_config(

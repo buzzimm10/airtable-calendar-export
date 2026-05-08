@@ -12,6 +12,15 @@ PATCHES (2026-03-25):
   dual Programming Fri/Sun, optional Mediaplanning, UK blank, real date headers,
   workbook/template preservation, STATUS CONFORMING mirroring with fallback.
 """
+import argparse
+import os
+import re
+import sys
+import logging
+from typing import Dict, List, Optional, Tuple
+from openpyxl import load_workbook
+from dotenv import load_dotenv
+load_dotenv()  # carga .env del cwd (raíz del proyecto)
 
 from exporters.full_calendar import (
     rebuild_full_calendar_week_merges,
@@ -29,150 +38,29 @@ from exporters.full_calendar import (
     infer_week_number_for_block,
 )
 
-from exporters.monthly_overview import (
-    overview_bucket,
-    overview_row_offset,
-    overview_visual_position,
-    build_overview_lines,
-    apply_overview_fill,
-    write_overview_cell,
-    write_vertical_short_cell,
-    auto_adjust_overview_row_height,
-    clear_overview_week,
-    write_overview_headers,
-    collect_overview_events,
-    write_overview_events,
-    populate_monthly_overview,
-)
+from exporters.monthly_overview import populate_monthly_overview
 
-from config.brands import BRAND_CONFIG
-from config.fields import AT_FIELDS
 from config.layouts import (
     TARGET_SHEET,
-    MONTHLY_OVERVIEW_SHEET,
     DAY_ORDER,
     DAY_LAYOUT,
-    FULL_CALENDAR_COUNTRY_ROW_RANGES,
-    FULL_CALENDAR_WEEKLY_COUNT_COL,
-    OVERVIEW_DAY_COLS,
-    OVERVIEW_WEEK_LAYOUT,
 )
-from config.styles import (
-    OVERVIEW_FILL_COLORS,
-    OUT_OF_MONTH_FILL,
-    OVERVIEW_DAY_LABELS,
-)
-
-from config.countries import (
-    SHEET_COUNTRIES,
-    CHANNEL_COUNTRY_MAP,
-    COUNTRY_ALIASES,
-    COUNTRY_SHORT_NAMES,
-    REGION_PRESETS,
-    EXCLUDE_NOTE_PATTERNS,
-)
-
-from core.text_formatting import (
-    normalize_str,
-    lower_clean,
-    bullet_join,
-    tc_in_out_str,
-    replace_month_in_title,
-    join_comments,
-)
-
 from core.dates import (
-    parse_date,
-    monday_of_week,
     resolve_target_month_year,
-    first_visible_monday,
     first_visible_monday_of_target_month,
     full_calendar_anchor_dates_from_records,
-    month_name_from_records,
 )
-
 from core.filters import (
     filter_records_by_brand,
     filter_records_by_month,
 )
-
-from core.excel_utils import (
-    get_writable_cell,
-    ensure_writable_cell,
-    cleanup_stale_merged_cells,
-    safe_set_value,
-    force_unmerged_writable_cell,
-    cell_value,
-    center_wrap,
-    left_wrap,
-    copy_cell_style,
-    get_anchor_dates_from_values_wb,
-    _to_indices,
-)
-
+from core.excel_utils import cleanup_stale_merged_cells, get_anchor_dates_from_values_wb
 from core.airtable_client import (
     fetch_airtable_records,
     load_local_json,
     fetch_channel_id_to_name_map,
 )
-
-from core.countries import (
-    extract_excluded_countries_from_notes,
-    normalize_excluded_market_name,
-    format_excluded_markets_comment,
-    collect_included_countries,
-    resolve_region_countries,
-    ordered_country_list,
-    format_except_suffix,
-    normalize_overview_region,
-)
-
-from services.planner_service import (
-    WeekBlock,
-    hub_role,
-    asset_is_event,
-    earliest_deadline_for_day,
-    load_and_filter_records,
-    build_comments_for_excel,
-    assemble_text_for_single_asset,
-    assemble_texts_for_multi_assets,
-    get_priority_sort_value,
-    aggregate_by_week_day_and_role,
-)
-
-import argparse
-import os
-import re
-import sys
-import json
-import logging
-import math
-from collections import defaultdict, Counter
-from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional, Tuple
-
-import requests
-from copy import copy
-from openpyxl import load_workbook
-from openpyxl.utils import column_index_from_string, get_column_letter
-from openpyxl.styles import Font, Alignment, PatternFill
-from openpyxl.cell.cell import Cell, MergedCell
-
-from dotenv import load_dotenv
-load_dotenv()  # carga .env del cwd (raíz del proyecto)
-
-
-BASE_DAY_TEMPLATE = {
-    "Monday": {"programming": 1, "mediaplanning": 1, "uk": 1},
-    "Tuesday": {"programming": 1, "mediaplanning": 1, "uk": 1},
-    "Wednesday": {"programming": 1, "mediaplanning": 1, "uk": 1},
-    "Thursday": {"programming": 1, "mediaplanning": 1, "uk": 1},
-    "Friday": {"programming": 2, "mediaplanning": 1, "uk": 1},
-    "Saturday": {"programming": 1, "mediaplanning": 1, "uk": 1},
-    "Sunday": {"programming": 2, "mediaplanning": 1, "uk": 1},
-}
-
-MAX_ASSETS_PER_HUB_PER_DAY = 2
+from services.planner_service import load_and_filter_records, aggregate_by_week_day_and_role
 
 
 def populate_calendar(template_path: str, output_path: str, records: List[Dict],

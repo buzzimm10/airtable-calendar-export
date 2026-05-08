@@ -221,44 +221,39 @@ def shade_out_of_month_days_full_calendar(ws, blocks: Dict[date, WeekBlock], tar
                     cell.fill = copy(grey_fill)
 
 def set_full_calendar_column_widths(ws):
-    """
-    Adjust column widths for the fixed 4-column-per-day layout.
-    Make Programming columns wider so days with 2 assets remain readable.
-    """
     for day_name in DAY_ORDER:
         prog_cols = [col for role, col in DAY_LAYOUT[day_name] if role == "Programming"]
         media_cols = [col for role, col in DAY_LAYOUT[day_name] if role == "Mediaplanning"]
         uk_cols = [col for role, col in DAY_LAYOUT[day_name] if role == "UK"]
 
         for col in prog_cols:
-            ws.column_dimensions[get_column_letter(col)].width = 18
+            ws.column_dimensions[get_column_letter(col)].width = 40
 
         for col in media_cols:
-            ws.column_dimensions[get_column_letter(col)].width = 16
+            ws.column_dimensions[get_column_letter(col)].width = 18
 
         for col in uk_cols:
             ws.column_dimensions[get_column_letter(col)].width = 14
 
-def auto_adjust_full_calendar_row_heights(ws, blocks: Dict[date, WeekBlock]):
-    """
-    Increase row heights for key content rows in FULL CALENDAR.
-    """
-    target_rows = set()
-
+def auto_adjust_full_calendar_row_heights(ws, blocks):
     for block in blocks.values():
-        for row_idx in [
-            block.property_row,
-            block.content_type_row,
-            block.title_row,
-            block.synopsis_row,
-            block.strategy_row,
-            block.comments_row,
-        ]:
-            if row_idx:
-                target_rows.add(row_idx)
+        row_heights = {
+            block.property_row: 28,
+            block.content_type_row: 24,
+            block.title_row: 42,
+            block.synopsis_row: 72,
+            block.strategy_row: 36,
+            block.tx_row: 30,
+            block.tc_row: 36,
+            block.comments_row: 48,
+        }
 
-    for row_idx in target_rows:
-        ws.row_dimensions[row_idx].height = max(ws.row_dimensions[row_idx].height or 15, 36)
+        for row_idx, height in row_heights.items():
+            if row_idx:
+                ws.row_dimensions[row_idx].height = max(
+                    ws.row_dimensions[row_idx].height or 15,
+                    height
+                )
 
 def write_week_deadlines_fixed(ws, block, per_day_records):
     if not block.deadline_row:

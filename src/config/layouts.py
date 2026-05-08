@@ -60,3 +60,5 @@ BASE_DAY_TEMPLATE = {
     "Saturday": {"programming": 1, "mediaplanning": 1, "uk": 1},
     "Sunday": {"programming": 2, "mediaplanning": 1, "uk": 1},
 }
+
+MAX_ASSETS_PER_HUB_PER_DAY = 2

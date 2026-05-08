@@ -94,17 +94,17 @@ Example: ``026-W23``
 ## Run Export
 Disney Channel, June 2026
 ```bash
-.venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month 2026.xltx" --output "output\DC_EMEA_JUN26.xlsx" --channel "Disney Channel" --month "2026-06" --log-level INFO
+.venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx" --output "output\DC_EMEA_JUN26.xlsx" --channel "Disney Channel" --month "2026-06" --log-level INFO
 ```
 
 With debug logs:
 ```bash
-.venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month 2026.xltx" --output "output\debug_output.xlsx" --channel "Disney Channel" --month "2026-06" --log-level DEBUG
+.venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx" --output "output\debug_output.xlsx" --channel "Disney Channel" --month "2026-06" --log-level DEBUG
 ```
 
 Using local JSON:
 ```bash
-.venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month 2026.xltx" --output "output\test_exported.xlsx" --json "data\exported_airtable.json" --channel "Disney Channel" --month "2026-06" --log-level DEBUG
+.venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx" --output "output\test_exported.xlsx" --json "data\exported_airtable.json" --channel "Disney Channel" --month "2026-06" --log-level DEBUG
 ```
 ---
 

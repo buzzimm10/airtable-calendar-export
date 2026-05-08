@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Calendar: Airtable",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/src/populate_calendar.py",
+        "--template", "templates/X_Social Media Calendar DC YouTube EMEA - month 2026.xltx",
+        "--output", "output/dc_emea_may2026.xlsx",
+        "--channel", "Disney Channel",
+        "--month", "May",
+        "--log-level", "INFO"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

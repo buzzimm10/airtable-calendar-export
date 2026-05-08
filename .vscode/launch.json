@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run calendar (Airtable)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/populate_calendar.py",
+      "args": [
+        "--template", "templates/X_Social Media Calendar DC YouTube EMEA - month 2026.xltx",
+        "--output", "output/dc_emea_may2026.xlsx",
+        "--channel", "Disney Channel",
+        "--month", "May",
+        "--log-level", "INFO"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Run calendar (JSON test)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/populate_calendar.py",
+      "args": [
+        "--template", "templates/X_Social Media Calendar DC YouTube EMEA - month 2026.xltx",
+        "--output", "output/test_calendar.xlsx",
+        "--json", "data/sample_airtable.json",
+        "--channel", "Disney Channel",
+        "--month", "May",
+        "--log-level", "DEBUG"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

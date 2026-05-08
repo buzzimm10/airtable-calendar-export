@@ -1,0 +1,7 @@
+.venv/
+.env
+output/
+__pycache__/
+
+# Ignore the sample data file
+data/sample_airtable.json

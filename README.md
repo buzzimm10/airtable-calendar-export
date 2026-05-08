@@ -97,6 +97,11 @@ Disney Channel, June 2026
 .venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx" --output "output\DC_EMEA_JUN26.xlsx" --channel "Disney Channel" --month "2026-06" --log-level INFO
 ```
 
+or without template (default with Channel/Brand):
+```bash
+.venv\Scripts\python.exe src\populate_calendar.py --output "output\test_widths_july.xlsx" --channel "Disney Channel" --month "2026-07" --log-level INFO
+```
+
 With debug logs:
 ```bash
 .venv\Scripts\python.exe src\populate_calendar.py --template "templates\X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx" --output "output\debug_output.xlsx" --channel "Disney Channel" --month "2026-06" --log-level DEBUG

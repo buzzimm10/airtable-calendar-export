@@ -84,7 +84,7 @@ if st.button("Generate calendar"):
         os.makedirs(output_folder, exist_ok=True)
         output_path = os.path.join(output_folder, output_filename)
 
-        result = run_planner(
+        result = load_and_filter_records(
             template_path=template_path,
             output_path=output_path,
             month=month,

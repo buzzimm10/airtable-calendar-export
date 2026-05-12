@@ -6,13 +6,17 @@ TEMPLATE_CONFIG = {
         "full_calendar_sheet": "FULL CALENDAR YT DC EMEA",
         "monthly_overview_sheet": "MONTHLY OVERVIEW YT DC EMEA",
         "week_anchor_cells": ["D6", "D59", "D112", "D165", "D218"],
+        "brand_code": "DC",
+        "exporter": "dc",
         "supports_monthly_overview": True,
     },
     "Disney Jr.": {
         "template_path": Path("templates/X_Social Media Calendar DJR YouTube EMEA - month YYYY.xltx"),
         "full_calendar_sheet": "FULL CALENDAR YT DJR EMEA",
         "monthly_overview_sheet": "MONTHLY OVERVIEW YT DJR EMEA",
-        "week_anchor_cells": ["D6", "D59", "D112", "D165", "D218"],
+        "week_anchor_cells": ["D7", "D69", "D131", "D193", "D255"],
+        "brand_code": "DJR",
+        "exporter": "djr",
         "supports_monthly_overview": True,
     },
 }

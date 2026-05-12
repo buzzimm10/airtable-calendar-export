@@ -136,6 +136,11 @@ COUNTRY_ALIASES = {
     "norway": "Norway (Norwegian)",
     "no": "Norway (Norwegian)",
     "norwegian": "Norway (Norwegian)",
+
+    "turkey": "Türkiye",
+    "tukey": "Türkiye",
+    "disney kids turkey": "Türkiye",
+    "türkiye": "Türkiye",
 }
 
 COUNTRY_SHORT_NAMES = {

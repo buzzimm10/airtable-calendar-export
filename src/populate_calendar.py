@@ -38,6 +38,8 @@ from exporters.full_calendar import (
     infer_week_number_for_block,
 )
 
+from exporters.full_calendar_djr import populate_calendar_djr
+
 from exporters.monthly_overview import populate_monthly_overview
 
 from config.layouts import (
@@ -63,7 +65,12 @@ from core.airtable_client import (
 )
 from services.planner_service import load_and_filter_records, aggregate_by_week_day_and_role
 
-def populate_calendar(template_path: str, output_path: str, records: List[Dict],
+import warnings
+
+warnings.filterwarnings("ignore", message="wmf image format is not supported.*")
+warnings.filterwarnings("ignore", message="Data Validation extension is not supported.*")
+
+def populate_calendar_dc(template_path: str, output_path: str, records: List[Dict],
                       week_anchor_cells: Optional[List[str]] = None,
                       enable_mediaplanning: bool = True,
                       anchor_dates_override: Optional[List[str]] = None,
@@ -154,7 +161,7 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
 
 def main():
     parser = argparse.ArgumentParser(description="Populate Disney Channel EMEA YouTube calendar into existing template.")
-    parser.add_argument("--template", help="Path to existing Excel template (.xltx or .xlsx). If omitted, uses brand default.")
+    parser.add_argument("--template", required=False, help="Path to existing Excel template (.xltx or .xlsx).")
     parser.add_argument("--output", required=True, help="Path to output .xlsx file.")
     parser.add_argument("--airtable-token", default=os.getenv("AIRTABLE_API_TOKEN"),
                         help="Airtable API token or set AIRTABLE_API_TOKEN.")
@@ -246,18 +253,35 @@ def main():
 )
 
     week_anchors = args.anchors if args.anchors else ["D6", "D59", "D112", "D165", "D218"]
-    template_path = args.template or str(template_config["template_path"])
+    template_path = args.template
+
+    if not template_path:
+        template_path = str(get_template_config(args.channel)["template_path"])
     week_anchors = args.anchors if args.anchors else template_config["week_anchor_cells"]
 
-    populate_calendar(
-        template_path=template_path,
-        output_path=args.output,
-        records=records,
-        week_anchor_cells=week_anchors,
-        enable_mediaplanning=enable_mediaplanning,
-        anchor_dates_override=args.anchor_dates,
-        channel_id_to_name_map=channel_id_to_name_map,
-    )
+    print("ROUTER BRAND:", repr(args.channel))
+    print("TEMPLATE USED:", template_path)
+    print("OUTPUT USED:", args.output)
+    print("RECORDS BEFORE EXPORT:", len(records))
+
+    if args.channel.strip().lower() == "disney jr.":
+        populate_calendar_djr(
+            template_path=template_path,
+            output_path=args.output,
+            records=records,
+            enable_mediaplanning=enable_mediaplanning,
+            channel_id_to_name_map=channel_id_to_name_map,
+        )
+    else:
+        populate_calendar_dc(
+            template_path=template_path,
+            output_path=args.output,
+            records=records,
+            week_anchor_cells=week_anchors,
+            enable_mediaplanning=enable_mediaplanning,
+            anchor_dates_override=args.anchor_dates,
+            channel_id_to_name_map=channel_id_to_name_map,
+        )
 
 if __name__ == "__main__":
     main()

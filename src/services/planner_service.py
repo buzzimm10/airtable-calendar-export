@@ -269,7 +269,7 @@ def export_calendar(
     include_mediaplanning: bool = True,
 ):
     from config.brands import get_brand_config
-    from exporters.full_calendar import populate_calendar_dc
+    from populate_calendar import populate_calendar_dc
     from exporters.full_calendar_djr import populate_calendar_djr
 
     brand_config = get_brand_config(brand)

@@ -3,28 +3,38 @@ import sys
 from datetime import datetime
 
 import streamlit as st
-from config.brands import get_brand_config
-from services.planner_service import load_and_filter_records, export_calendar
-from exporters.shared.validation import run_basic_qa
 
 # Allow imports from src/
-CURRENT_DIR = os.path.dirname(__file__)
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
-if SRC_DIR not in sys.path:
-    sys.path.append(SRC_DIR)
 
-from services.planner_service import load_and_filter_records
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+from config.brands import get_brand_config
+from services.planner_service import (
+    load_and_filter_records,
+    export_calendar,
+)
+from exporters.shared.validation import run_basic_qa
 
 
 st.set_page_config(
-    page_title="Disney YouTube Calendar Tool",
+    page_title="Disney YouTube Calendar Exporter",
     page_icon="📅",
     layout="centered",
 )
 
-st.title("Disney YouTube Calendar Tool")
+st.title("Disney YouTube Calendar Exporter")
+st.caption(
+    "Create Excel calendars from Airtable data for Disney Channel and Disney Jr."
+)
 
-st.write("Generate FULL CALENDAR and MONTHLY OVERVIEW from Airtable or local JSON.")
+# ---------------------------------------------------
+# SETUP
+# ---------------------------------------------------
+
+st.subheader("1. Calendar setup")
 
 brand = st.selectbox(
     "Brand",
@@ -34,17 +44,26 @@ brand = st.selectbox(
 
 brand_config = get_brand_config(brand)
 
-template_path = st.text_input(
-    "Template path",
-    value=brand_config["template"],
+template_option = st.selectbox(
+    "Template",
+    ["DC", "DJR"],
+    index=0 if brand == "Disney Channel" else 1,
 )
 
-output_folder = st.text_input(
-    "Output folder",
-    value="output",
-)
+template_paths = {
+    "DC": "templates/X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx",
+    "DJR": "templates/X_Social Media Calendar DJR YouTube EMEA - month YYYY.xltx",
+}
 
-year = st.selectbox("Year", ["2026", "2027", "2028"], index=0)
+template_path = template_paths[template_option]
+
+st.caption(f"Using template: {template_path}")
+
+year = st.selectbox(
+    "Year",
+    ["2026", "2027", "2028"],
+    index=0,
+)
 
 month_number = st.selectbox(
     "Month",
@@ -62,47 +81,81 @@ month_number = st.selectbox(
         ("11", "November"),
         ("12", "December"),
     ],
-    index=4,
+    index=5,
     format_func=lambda x: x[1],
 )
 
 month = f"{year}-{month_number[0]}"
 
+# ---------------------------------------------------
+# EXPORT OPTIONS
+# ---------------------------------------------------
 
+st.subheader("2. Export options")
 
 include_mediaplanning = st.checkbox(
     "Include Mediaplanning / Creative Services",
     value=True,
 )
 
-run_qa = st.checkbox("Run QA before export", value=True)
+run_qa = st.checkbox(
+    "Run QA before export",
+    value=True,
+)
 
-use_json = st.checkbox("Use local JSON instead of Airtable", value=False)
+use_json = st.checkbox(
+    "Use local JSON instead of Airtable",
+    value=False,
+)
 
 json_path = None
+
 if use_json:
-    json_path = st.text_input("JSON path", value="data/sample_airtable.json")
+    json_path = st.text_input(
+        "JSON path",
+        value="data/sample_airtable.json",
+    )
+
+# ---------------------------------------------------
+# OUTPUT
+# ---------------------------------------------------
+
+st.subheader("3. Output")
+
+output_folder = st.selectbox(
+    "Output folder",
+    ["output"],
+    index=0,
+)
+
+with st.expander("Advanced output settings"):
+    output_folder = st.text_input(
+        "Custom output folder",
+        value=output_folder,
+    )
 
 output_filename = st.text_input(
     "Output filename",
-    value=f"calendar_{brand.lower().replace(' ', '_')}_{month.lower()}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+    value=(
+        f"calendar_{brand.lower().replace(' ', '_')}_"
+        f"{month.lower()}_"
+        f"{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    ),
 )
+
+# ---------------------------------------------------
+# GENERATE
+# ---------------------------------------------------
 
 if st.button("Generate calendar"):
     try:
         os.makedirs(output_folder, exist_ok=True)
-        output_path = os.path.join(output_folder, output_filename)
 
-        result = load_and_filter_records(
-            template_path=template_path,
-            output_path=output_path,
-            month=month,
-            channel=brand,
-            json_path=json_path,
-            include_mediaplanning=include_mediaplanning,
-            log_level="INFO",
-            run_qa=run_qa,
+        output_path = os.path.join(
+            output_folder,
+            output_filename,
         )
+
         records, channel_id_to_name_map = load_and_filter_records(
             month=month,
             channel=brand,
@@ -112,10 +165,13 @@ if st.button("Generate calendar"):
 
         if run_qa:
             issues = run_basic_qa(records)
+
             if issues:
                 st.warning(f"QA found {len(issues)} issues.")
+
                 with st.expander("View QA issues"):
-                    st.write(issues)
+                    for issue in issues:
+                        st.write(f"- {issue}")
 
         export_calendar(
             template_path=template_path,
@@ -126,7 +182,10 @@ if st.button("Generate calendar"):
             include_mediaplanning=include_mediaplanning,
         )
 
-        st.success(f"Calendar generated successfully. Records used: {len(records)}")    
+        st.success(
+            f"Calendar generated successfully. "
+            f"Records used: {len(records)}"
+        )
 
         with open(output_path, "rb") as f:
             st.download_button(

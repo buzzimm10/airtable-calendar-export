@@ -492,3 +492,4 @@ def infer_week_number_for_block(per_day_all_roles: Dict[str, List[Dict]], monday
         return most_common
     # fallback ISO week
     return str(monday_date.isocalendar()[1])
+

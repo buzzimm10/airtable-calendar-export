@@ -171,9 +171,16 @@ def write_djr_week_number(ws, layout, week_monday):
 
 def write_djr_asset_to_col(ws, layout, col, record):
     single = assemble_text_for_single_asset(record)
+    content_type = single["content_type"]
+
+    if normalize_str(record.get(AT_FIELDS["content_type"])) in {"Editorial Short", "Exclusive"}:
+        content_type = "Exclusive Short"
+
+    if normalize_str(record.get(AT_FIELDS["content_type"])) == "Vertical Short":
+        content_type = "Vertical Short"
 
     safe_set_value(ws, layout["property_row"], col, single["property"], alignment=center_wrap())
-    safe_set_value(ws, layout["content_type_row"], col, single["content_type"], alignment=center_wrap())
+    safe_set_value(ws, layout["content_type_row"], col, content_type, alignment=center_wrap())
     safe_set_value(ws, layout["title_row"], col, single["title"], alignment=center_wrap())
     safe_set_value(ws, layout["synopsis_row"], col, single["synopsis"], alignment=center_wrap())
     safe_set_value(ws, layout["strategy_row"], col, single["strategy"], alignment=center_wrap())

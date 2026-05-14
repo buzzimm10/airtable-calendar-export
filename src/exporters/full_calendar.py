@@ -1,4 +1,5 @@
 import logging
+import re
 from copy import copy
 from typing import Dict, List, Optional
 from datetime import date, timedelta
@@ -148,6 +149,19 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
                     alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
                 )
 
+def format_week_label(week_number_value: str) -> str:
+    value = str(week_number_value or "").strip()
+
+    # If Airtable sends 2026-W31, keep it clean
+    if re.match(r"^\d{4}-W\d{1,2}$", value):
+        return value
+
+    # If it only sends 31
+    if value.isdigit():
+        return f"WEEK {value}"
+
+    return value
+
 def write_week_label(ws, block, week_number_value: str):
     """
     Write 'WEEK <N>' into B row of the anchor line.
@@ -157,7 +171,7 @@ def write_week_label(ws, block, week_number_value: str):
         ws,
         block.anchor_row,
         2,
-        f"WEEK {week_number_value}",
+        format_week_label(week_number_value),
         alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
     )
 

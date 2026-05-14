@@ -24,4 +24,5 @@ AT_FIELDS = {
     "brand": "Brand",
     "title": "YouTube Title",
     "excluded_markets": "Excluded Markets",
+    "episode_category": "Episode Category",
 }

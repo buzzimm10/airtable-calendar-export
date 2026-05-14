@@ -3,6 +3,9 @@ import sys
 from datetime import datetime
 
 import streamlit as st
+from config.brands import get_brand_config
+from services.planner_service import load_and_filter_records, export_calendar
+from exporters.shared.validation import run_basic_qa
 
 # Allow imports from src/
 CURRENT_DIR = os.path.dirname(__file__)
@@ -23,9 +26,17 @@ st.title("Disney YouTube Calendar Tool")
 
 st.write("Generate FULL CALENDAR and MONTHLY OVERVIEW from Airtable or local JSON.")
 
+brand = st.selectbox(
+    "Brand",
+    ["Disney Channel", "Disney Jr."],
+    index=0,
+)
+
+brand_config = get_brand_config(brand)
+
 template_path = st.text_input(
     "Template path",
-    value="templates/X_Social Media Calendar DC YouTube EMEA - month 2026.xltx",
+    value=brand_config["template"],
 )
 
 output_folder = st.text_input(
@@ -57,16 +68,14 @@ month_number = st.selectbox(
 
 month = f"{year}-{month_number[0]}"
 
-channel = st.selectbox(
-    "Channel",
-    ["Disney Channel", "Disney Jr."],
-    index=0,
-)
+
 
 include_mediaplanning = st.checkbox(
     "Include Mediaplanning / Creative Services",
     value=True,
 )
+
+run_qa = st.checkbox("Run QA before export", value=True)
 
 use_json = st.checkbox("Use local JSON instead of Airtable", value=False)
 
@@ -76,7 +85,7 @@ if use_json:
 
 output_filename = st.text_input(
     "Output filename",
-    value=f"calendar_{channel.lower().replace(' ', '_')}_{month.lower()}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+    value=f"calendar_{brand.lower().replace(' ', '_')}_{month.lower()}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
 )
 
 if st.button("Generate calendar"):
@@ -88,13 +97,36 @@ if st.button("Generate calendar"):
             template_path=template_path,
             output_path=output_path,
             month=month,
-            channel=channel,
+            channel=brand,
             json_path=json_path,
             include_mediaplanning=include_mediaplanning,
             log_level="INFO",
+            run_qa=run_qa,
+        )
+        records, channel_id_to_name_map = load_and_filter_records(
+            month=month,
+            channel=brand,
+            json_path=json_path,
+            log_level="INFO",
         )
 
-        st.success(f"Calendar generated successfully. Records used: {result['records_count']}")
+        if run_qa:
+            issues = run_basic_qa(records)
+            if issues:
+                st.warning(f"QA found {len(issues)} issues.")
+                with st.expander("View QA issues"):
+                    st.write(issues)
+
+        export_calendar(
+            template_path=template_path,
+            output_path=output_path,
+            records=records,
+            channel_id_to_name_map=channel_id_to_name_map,
+            brand=brand,
+            include_mediaplanning=include_mediaplanning,
+        )
+
+        st.success(f"Calendar generated successfully. Records used: {len(records)}")    
 
         with open(output_path, "rb") as f:
             st.download_button(

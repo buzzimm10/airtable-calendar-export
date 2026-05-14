@@ -258,3 +258,35 @@ def aggregate_by_week_day_and_role(records: List[Dict]) -> Dict[Tuple[date, str,
     for k in buckets:
         buckets[k].sort(key=sort_key)
     return buckets
+
+
+def export_calendar(
+    template_path: str,
+    output_path: str,
+    records,
+    channel_id_to_name_map,
+    brand: str,
+    include_mediaplanning: bool = True,
+):
+    from config.brands import get_brand_config
+    from exporters.full_calendar import populate_calendar_dc
+    from exporters.full_calendar_djr import populate_calendar_djr
+
+    brand_config = get_brand_config(brand)
+
+    if brand_config["exporter"] == "djr":
+        populate_calendar_djr(
+            template_path=template_path,
+            output_path=output_path,
+            records=records,
+            enable_mediaplanning=include_mediaplanning,
+            channel_id_to_name_map=channel_id_to_name_map,
+        )
+    else:
+        populate_calendar_dc(
+            template_path=template_path,
+            output_path=output_path,
+            records=records,
+            enable_mediaplanning=include_mediaplanning,
+            channel_id_to_name_map=channel_id_to_name_map,
+        )

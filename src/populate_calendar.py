@@ -48,6 +48,7 @@ from config.layouts import (
     DAY_LAYOUT,
 )
 from config.template_config import get_template_config
+from config.brands import get_brand_config
 from core.dates import (
     resolve_target_month_year,
     first_visible_monday_of_target_month,
@@ -64,6 +65,7 @@ from core.airtable_client import (
     fetch_channel_id_to_name_map,
 )
 from services.planner_service import load_and_filter_records, aggregate_by_week_day_and_role
+from exporters.shared.validation import run_basic_qa
 
 import warnings
 
@@ -175,8 +177,13 @@ def main():
     parser.add_argument("--channel", default="Disney Channel", help='Filter by Brand, e.g. "Disney Channel", "Disney Jr.".')
     parser.add_argument("--month", help='Filter by "Month" (optional, case-insensitive).')
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR).")
+    parser.add_argument("--qa", action="store_true", help="Run QA checks before exporting.")
     args = parser.parse_args()
 
+    brand_config = get_brand_config(args.channel)
+
+    template_path = args.template or brand_config["template"]
+    exporter = brand_config["exporter"]
     template_config = get_template_config(args.channel)
 
     load_dotenv()
@@ -205,52 +212,12 @@ def main():
                         format="%(levelname)s: %(message)s")
 
     # Fuente de datos: JSON o Airtable
-    channel_id_to_name_map = {}
-
-    if args.json:
-        logging.info(f"Loading records from JSON: {args.json}")
-        records = load_local_json(args.json)
-
-        # Even with local JSON, try to resolve linked YouTube Channel IDs if Airtable creds exist
-        if token and base_id:
-            logging.info("Loading channel mappings from Airtable...")
-            channel_id_to_name_map = fetch_channel_id_to_name_map(token, base_id)
-    else:
-        if not token or not base_id or not table_id:
-            missing = []
-            if not token: missing.append("AIRTABLE_API_TOKEN")
-            if not base_id: missing.append("AIRTABLE_BASE_ID")
-            if not table_id: missing.append("AIRTABLE_TABLE_ID")
-            parser.error(f"Missing Airtable config: {', '.join(missing)}. Set them in .env or pass flags.")
-
-        logging.info("Fetching records from Airtable...")
-        records = fetch_airtable_records(
-            api_token=token,
-            base_id=base_id,
-            table_id=table_id,
-            view=view,
-        )
-
-        logging.info("Loading channel mappings from Airtable...")
-        channel_id_to_name_map = fetch_channel_id_to_name_map(token, base_id)
-
-    logging.info(f"Fetched {len(records)} records from Airtable/JSON source")
-
-    # Filtros (Channel/Month) permanecen igual
-    logging.info(f"Before filters: {len(records)} records")
-
-    records = filter_records_by_brand(records, args.channel)
-    logging.info(f"After brand filter '{args.channel}': {len(records)} records")
-
-    records = filter_records_by_month(records, args.month)
-    logging.info(f"After month filter '{args.month}': {len(records)} records")
-
     records, channel_id_to_name_map = load_and_filter_records(
         month=args.month,
         channel=args.channel,
         json_path=args.json,
         log_level=args.log_level,
-)
+    )
 
     week_anchors = args.anchors if args.anchors else ["D6", "D59", "D112", "D165", "D218"]
     template_path = args.template
@@ -264,7 +231,17 @@ def main():
     print("OUTPUT USED:", args.output)
     print("RECORDS BEFORE EXPORT:", len(records))
 
-    if args.channel.strip().lower() == "disney jr.":
+    if args.qa:
+        issues = run_basic_qa(records)
+
+        if issues:
+            logging.warning("QA issues found:")
+            for issue in issues:
+                logging.warning(f"- {issue}")
+        else:
+            logging.info("QA passed: no issues found.")
+
+    if exporter == "djr":
         populate_calendar_djr(
             template_path=template_path,
             output_path=args.output,

@@ -31,7 +31,7 @@ from services.planner_service import (
     earliest_deadline_for_day,
 )
 from exporters.monthly_overview_djr import populate_monthly_overview_djr
-
+from exporters.shared.records import aggregate_by_visual_week_day_role  
 import warnings
 
 warnings.filterwarnings("ignore", message="wmf image format is not supported.*")
@@ -59,48 +59,6 @@ DC_TO_DJR_COUNTRY = {
     "Norway (Norwegian)": "Norway",
 }
 
-def aggregate_djr_by_visual_week_day_role(records, first_monday):
-    buckets = defaultdict(list)
-
-    for rec in records:
-        fields = rec.get("fields", rec)
-
-        if asset_is_event(fields):
-            continue
-
-        live_date = parse_date(fields.get(AT_FIELDS["live_date"]))
-        if not live_date:
-            continue
-
-        delta_days = (live_date - first_monday).days
-        if delta_days < 0:
-            continue
-
-        week_index = (delta_days // 7) + 1
-        if week_index < 1 or week_index > 5:
-            continue
-
-        day_name = DAY_ORDER[live_date.weekday()]
-
-        role = hub_role(fields.get(AT_FIELDS["owner_hub"]))
-        if role not in {"Programming", "Mediaplanning"}:
-            continue
-
-        key = (week_index, day_name, role)
-        buckets[key].append(fields)
-
-        print(
-            "DJR BUCKET:",
-            key,
-            "| live_date:",
-            live_date,
-            "| owner:",
-            fields.get(AT_FIELDS["owner_hub"]),
-            "| title:",
-            fields.get(AT_FIELDS["youtube_title"]),
-        )
-
-    return buckets
 
 def get_djr_target_columns(day_name, programming_count, mediaplanning_count):
     cols = DJR_DAY_LAYOUT[day_name]
@@ -380,7 +338,7 @@ def populate_calendar_djr(
 
     print("DJR first_monday:", first_monday)
 
-    buckets = aggregate_djr_by_visual_week_day_role(records, first_monday)
+    buckets = aggregate_by_visual_week_day_role(records, first_monday)
 
     logging.info(f"DJR buckets created: {len(buckets)}")
 

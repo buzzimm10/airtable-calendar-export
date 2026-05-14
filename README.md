@@ -99,7 +99,7 @@ Disney Channel, June 2026
 
 or without template (default with Channel/Brand):
 ```bash
-.venv\Scripts\python.exe src\populate_calendar.py --output "output\test_widths_july.xlsx" --channel "Disney Channel" --month "2026-07" --log-level INFO
+.venv\Scripts\python.exe src\populate_calendar.py --output "output\DC_EMEA_JUL26.xlsx" --channel "Disney Channel" --month "2026-07" --log-level INFO
 ```
 
 With debug logs:

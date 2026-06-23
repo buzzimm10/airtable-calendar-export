@@ -170,7 +170,9 @@ def apply_overview_fill(cell, content_type: str):
 def write_overview_cell(ws, row: int, col: int, line1: str, line2: str, content_type: str, geofenced: bool):
     cell = get_writable_cell(ws, row, col)
 
-    new_text = line1 if not line2 else f"{line1}\n{line2}"
+    # Añadimos corchetes al line2 (Tiers) para que resalte textualmente ya que no podemos usar colores parciales
+    formatted_line2 = f"[{line2}]" if line2 else ""
+    new_text = line1 if not formatted_line2 else f"{line1}\n{formatted_line2}"
 
     existing = normalize_str(cell.value)
     if existing:
@@ -178,7 +180,7 @@ def write_overview_cell(ws, row: int, col: int, line1: str, line2: str, content_
     else:
         cell.value = new_text
 
-    # --- RESOLVER COLOR CON MAPEO CENTRALIZADO (ALIAS SAFE) ---
+    # --- RESOLVER COLOR DE FONDO (Mantiene tu fix del color verde) ---
     ct_norm = normalize_str(content_type)
     mapped_category = ct_norm
     for key, value in MONTHLY_OVERVIEW_MAPPING.items():
@@ -188,7 +190,6 @@ def write_overview_cell(ws, row: int, col: int, line1: str, line2: str, content_
 
     fill_color = OVERVIEW_FILL_COLORS.get(ct_norm)
     if not fill_color:
-        # Si pertenece al bucket de Lifts/Sneak Peeks/Videoclips, forzar el color verde solicitado #A9D08E
         if mapped_category.lower() == "scene lifts / sneak peeks / videoclips" or ct_norm.lower() in {"lift", "musical lift", "sneak peek", "videoclip"}:
             fill_color = "FFA9D08E"
         else:

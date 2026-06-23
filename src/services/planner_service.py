@@ -1,12 +1,3 @@
-from datetime import date
-from typing import Dict, List, Optional
-
-from config.fields import AT_FIELDS
-from core.dates import parse_date
-from core.text_formatting import normalize_str, lower_clean, bullet_join, tc_in_out_str
-from core.countries import format_excluded_markets_comment
-from core.text_formatting import join_comments
-import logging
 import os
 import logging
 from collections import defaultdict
@@ -15,12 +6,21 @@ from typing import Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 
+# --- Nuevos imports de config ---
+from config.content_types import CONTENT_TYPE_ALIASES, UPPERCASE_CONTENT_TYPES
+
+# --- Imports existentes ---
+from config.fields import AT_FIELDS
+from config.layouts import DAY_ORDER
+
 from core.airtable_client import (
     fetch_airtable_records,
     fetch_channel_id_to_name_map,
     load_local_json,
 )
-
+from core.countries import format_excluded_markets_comment
+from core.dates import parse_date, monday_of_week
+from core.filters import filter_records_by_brand, filter_records_by_month
 from core.text_formatting import (
     normalize_str,
     lower_clean,
@@ -28,20 +28,6 @@ from core.text_formatting import (
     tc_in_out_str,
     join_comments,
 )
-
-from core.countries import (
-    format_excluded_markets_comment,
-)
-
-from config.fields import AT_FIELDS
-from config.layouts import DAY_ORDER
-
-from core.dates import (
-    parse_date,
-    monday_of_week,
-)   
-
-from core.filters import filter_records_by_brand, filter_records_by_month
 
 class WeekBlock:
     def __init__(self, anchor_row: int, end_row: int, monday_date: date):
@@ -61,8 +47,10 @@ class WeekBlock:
         self.rollout_country_rows: Dict[str, int] = {}
         self.status_country_rows: Dict[str, int] = {}
 
-def hub_role(owner_hub: str) -> Optional[str]:
-    h = lower_clean(owner_hub)
+def hub_role(owner_hub: Optional[str]) -> Optional[str]:
+    # Si viene None (vacío en Airtable), lo convertimos a string vacío de forma segura
+    h = lower_clean(owner_hub or "")
+    
     if "uk" in h:
         return None
     if "media" in h or "creative" in h:
@@ -146,9 +134,10 @@ def build_comments_for_excel(record: Dict) -> str:
     )
 
 def assemble_text_for_single_asset(f: Dict) -> Dict[str, str]:
-    ct = normalize_str(f.get(AT_FIELDS["content_type"]))
-    if ct == "Exclusive":
-        ct = "Exclusive Short"
+    ct_raw = normalize_str(f.get(AT_FIELDS["content_type"]))
+
+    # 1. Aplicar alias desde la configuración
+    ct = CONTENT_TYPE_ALIASES.get(ct_raw, ct_raw)
 
     owner_role = hub_role(f.get(AT_FIELDS["owner_hub"]))
 
@@ -171,7 +160,7 @@ def assemble_text_for_single_asset(f: Dict) -> Dict[str, str]:
     tc_text = tc_in_out_str(f.get(AT_FIELDS["tc_in"]), f.get(AT_FIELDS["tc_out"]))
     comments = build_comments_for_excel(f)
 
-    if owner_role != "Programming" or ct == "Vertical Short":
+    if owner_role != "Programming" or ct in UPPERCASE_CONTENT_TYPES:
         ct = ct.upper()
         prop = prop.upper()
 

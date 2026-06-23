@@ -3,6 +3,7 @@
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from config.fields import AT_FIELDS
+from config.content_types import MONTHLY_OVERVIEW_MAPPING
 from core.dates import parse_date
 from core.text_formatting import normalize_str
 from services.planner_service import hub_role

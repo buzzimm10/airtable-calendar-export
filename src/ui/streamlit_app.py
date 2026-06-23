@@ -39,8 +39,23 @@ with st.sidebar:
     channel = st.selectbox("📺 Brand", ["Disney Channel", "Disney Jr."], index=0)
     
     col_yr, col_mo = st.columns(2)
+    
+    # --- Lógica de default: Próximo Mes ---
+    hoy = datetime.now()
+    next_m = hoy.month + 1 if hoy.month < 12 else 1
+    next_y = hoy.year if hoy.month < 12 else hoy.year + 1
+    
+    year_options = ["2026", "2027", "2028", "2029"]
+    try:
+        default_year_idx = year_options.index(str(next_y))
+    except ValueError:
+        default_year_idx = 0  # Fallback por si acaso
+        
+    default_month_idx = next_m - 1  # Los índices van de 0 a 11
+    # --------------------------------------
+
     with col_yr:
-        year = st.selectbox("📅 Year", ["2026", "2027", "2028", "2029"], index=0)
+        year = st.selectbox("📅 Year", year_options, index=default_year_idx)
     with col_mo:
         month_number = st.selectbox(
             "📆 Month",
@@ -49,7 +64,7 @@ with st.sidebar:
                 ("05", "May"), ("06", "Jun"), ("07", "Jul"), ("08", "Aug"), 
                 ("09", "Sep"), ("10", "Oct"), ("11", "Nov"), ("12", "Dec")
             ],
-            index=4, format_func=lambda x: x[1]
+            index=default_month_idx, format_func=lambda x: x[1]
         )
     month_str = f"{year}-{month_number[0]}"
     
@@ -88,6 +103,9 @@ with st.sidebar:
                 st.session_state.channel_map = channel_map
             except Exception as e:
                 st.error(f"Error cargando datos: {str(e)}")
+    # --- FIRMA / CRÉDITO ---
+    st.markdown("<br>" * 5, unsafe_allow_html=True) # Empujamos la firma hacia abajo
+    st.caption("⚙️ Built by Augusto Zimmermann")
 
 # --- CONTENIDO PRINCIPAL ---
 if st.session_state.records is None:

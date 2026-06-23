@@ -48,11 +48,12 @@ class WeekBlock:
         self.status_country_rows: Dict[str, int] = {}
 
 def hub_role(owner_hub: Optional[str]) -> Optional[str]:
-    # Si viene None (vacío en Airtable), lo convertimos a string vacío de forma segura
     h = lower_clean(owner_hub or "")
     
-    if "uk" in h:
+    # Omitimos UK y Studios
+    if "uk" in h or "studios" in h:
         return None
+    
     if "media" in h or "creative" in h:
         return "Mediaplanning"
     return "Programming"

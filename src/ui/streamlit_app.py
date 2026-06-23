@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime
+from collections import Counter
 import pandas as pd
 import streamlit as st
 
@@ -10,9 +11,11 @@ SRC_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
-from services.planner_service import load_and_filter_records
+from services.planner_service import load_and_filter_records, hub_role
 from config.fields import AT_FIELDS
-from populate_calendar import populate_calendar 
+from config.styles import OVERVIEW_FILL_COLORS # <-- NUEVO
+from config.content_types import MONTHLY_OVERVIEW_MAPPING # <-- NUEVO
+from populate_calendar import populate_calendar
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -70,11 +73,11 @@ with st.sidebar:
     
     st.divider()
     
-    # Lógica dinámica del nombre del Template
+    # Lógica del nombre del Template (Fijo a YYYY)
     if channel == "Disney Channel":
-        template_name = f"X_Social Media Calendar DC YouTube EMEA - month {year}.xltx"
+        template_name = "X_Social Media Calendar DC YouTube EMEA - month YYYY.xltx"
     else:
-        template_name = f"X_Social Media Calendar DJR YouTube EMEA - month {year}.xltx"
+        template_name = "X_Social Media Calendar DJR YouTube EMEA - month YYYY.xltx"
         
     default_template_path = f"templates/{template_name}"
     
@@ -152,16 +155,91 @@ else:
     if len(records) == 0:
         st.warning(f"No se encontraron assets en Airtable para {channel} en el mes seleccionado.")
     else:
-        # --- 2️⃣ QA SUMMARY ---
-        st.subheader("2️⃣ Resumen de QA")
-        qa_col1, qa_col2, qa_col3, qa_col4 = st.columns(4)
-        qa_col1.metric("Total Assets", len(records))
-        qa_col2.metric("🛑 Blockers", "0") # Mock por ahora
-        qa_col3.metric("⚠️ Warnings", "0") # Mock por ahora
-        qa_col4.metric("ℹ️ Info", "0")      # Mock por ahora
+    #--- 2️⃣ QA SUMMARY ---
+       # --- NUEVO: Procesamiento de Métricas (Insights) ---
+        hub_counts = Counter()
+        ct_counts = Counter()
+
+        for r in records:
+            f = r.get("fields", r)
+            
+            # 1. Contar Hubs
+            raw_hub = f.get(AT_FIELDS["owner_hub"])
+            # Usamos tu función hub_role para saber si es Programming o Mediaplanning
+            role = hub_role(raw_hub)
+            if role:
+                hub_counts[role] += 1
+            else:
+                hub_counts["Other/Ignored"] += 1
+
+            # 2. Contar Content Types (Excluyendo EVENT)
+            ct = f.get(AT_FIELDS["content_type"], "Missing Type")
+            # Ignoramos mayúsculas/minúsculas para asegurar que atrape todos los eventos
+            if str(ct).strip().upper() != "EVENT":
+                ct_counts[ct] += 1
+
+        # --- 2️⃣ INSIGHTS & QA SUMMARY ---
+        st.subheader("2️⃣ Insights & QA")
         
-        # PREVIEW DATA (Escondido por defecto para que sea más clean)
-        with st.expander("👀 Auditar datos extraídos (Preview)", expanded=False):
+        # Fila 1: Distribución por Hub
+        st.markdown("##### 🎬 Distribución de Assets")
+        hub_col1, hub_col2, hub_col3 = st.columns(3)
+        hub_col1.metric("Total Assets", len(records))
+        hub_col2.metric("📺 Programming Hub", hub_counts.get("Programming", 0))
+        hub_col3.metric("📱 Mediaplanning Hub", hub_counts.get("Mediaplanning", 0))
+        
+        # Expander para ver el detalle de Content Types CON COLORES
+        with st.expander("📊 Ver desglose por Content Type", expanded=False):
+            ct_df = pd.DataFrame(ct_counts.items(), columns=["Content Type", "Count"])
+            ct_df = ct_df.sort_values(by="Count", ascending=False)
+            
+            # Función para pintar las celdas usando la misma lógica de Excel
+            def style_content_type(val):
+                ct_norm = str(val).strip()
+                mapped_category = ct_norm
+                
+                # Buscar en la configuración
+                for key, value in MONTHLY_OVERVIEW_MAPPING.items():
+                    if key.lower() == ct_norm.lower():
+                        mapped_category = value
+                        break
+                
+                # Obtener color base
+                fill_color = OVERVIEW_FILL_COLORS.get(ct_norm)
+                
+                if not fill_color:
+                    # Lógica para Lifts/Sneak Peeks (Verde claro)
+                    if mapped_category.lower() == "scene lifts / sneak peeks / videoclips" or ct_norm.lower() in {"lift", "musical lift", "sneak peek", "videoclip"}:
+                        fill_color = "FFA9D08E"
+                    else:
+                        fill_color = OVERVIEW_FILL_COLORS.get(mapped_category, "FFFFFFFF")
+                
+                # --- FIX: Convertir ARGB a RGB válido para CSS ---
+                # Si el color tiene 8 caracteres (ej. FFA9D08E), ignoramos los dos primeros (FF)
+                if isinstance(fill_color, str) and len(fill_color) == 8:
+                    css_color = f"#{fill_color[2:]}"
+                elif isinstance(fill_color, str) and len(fill_color) == 6:
+                    css_color = f"#{fill_color}"
+                else:
+                    css_color = "#FFFFFF" # Fallback a blanco
+                    
+                return f"background-color: {css_color}; color: #000000; font-weight: bold;"
+
+            # Aplicamos el estilo de pandas (Styler) a la columna
+            styled_df = ct_df.style.map(style_content_type, subset=["Content Type"])
+            st.dataframe(styled_df, hide_index=True, use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Fila 2: QA Engine (Blockers & Warnings - Mock por ahora)
+        st.markdown("##### 🚦 Estado de Validación (QA)")
+        qa_col1, qa_col2, qa_col3 = st.columns(3)
+        qa_col1.metric("🛑 Blockers", "0")
+        qa_col2.metric("⚠️ Warnings", "0")
+        qa_col3.metric("ℹ️ Info", "0")
+        
+        # PREVIEW DATA
+        with st.expander("👀 Auditar datos extraídos (Data Preview)", expanded=False):
             preview_data = []
             for r in records:
                 f = r.get("fields", r)
@@ -171,7 +249,6 @@ else:
                     "Title": f.get(AT_FIELDS["youtube_title"], f.get(AT_FIELDS["title"], "")),
                     "Owner": f.get(AT_FIELDS["owner_hub"], "")
                 })
-            # Ocultamos el index para que la tabla se vea más profesional
             st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
         
         st.divider()
@@ -193,6 +270,7 @@ else:
                             records=records,
                             template_path=template_path,
                             output_path=output_path,
+                            channel=channel, # <-- ESTO ES VITAL
                             enable_mediaplanning=include_mediaplanning,
                             channel_id_to_name_map=st.session_state.channel_map
                         )

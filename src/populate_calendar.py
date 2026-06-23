@@ -46,6 +46,7 @@ from config.layouts import (
     DAY_ORDER,
     DAY_LAYOUT,
 )
+from config.template_config import get_template_config
 from core.dates import (
     resolve_target_month_year,
     first_visible_monday_of_target_month,
@@ -62,7 +63,6 @@ from core.airtable_client import (
     fetch_channel_id_to_name_map,
 )
 from services.planner_service import load_and_filter_records, aggregate_by_week_day_and_role
-
 
 def populate_calendar(template_path: str, output_path: str, records: List[Dict],
                       channel: str = "Disney Channel", 
@@ -169,7 +169,7 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
 
 def main():
     parser = argparse.ArgumentParser(description="Populate Disney Channel EMEA YouTube calendar into existing template.")
-    parser.add_argument("--template", required=True, help="Path to existing Excel template (.xltx or .xlsx).")
+    parser.add_argument("--template", help="Path to existing Excel template (.xltx or .xlsx). If omitted, uses brand default.")
     parser.add_argument("--output", required=True, help="Path to output .xlsx file.")
     parser.add_argument("--airtable-token", default=os.getenv("AIRTABLE_API_TOKEN"),
                         help="Airtable API token or set AIRTABLE_API_TOKEN.")
@@ -184,6 +184,8 @@ def main():
     parser.add_argument("--month", help='Filter by "Month" (optional, case-insensitive).')
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR).")
     args = parser.parse_args()
+
+    template_config = get_template_config(args.channel)
 
     load_dotenv()
     token = args.airtable_token or os.getenv("AIRTABLE_API_TOKEN")
@@ -259,9 +261,11 @@ def main():
 )
 
     week_anchors = args.anchors if args.anchors else ["D6", "D59", "D112", "D165", "D218"]
+    template_path = args.template or str(template_config["template_path"])
+    week_anchors = args.anchors if args.anchors else template_config["week_anchor_cells"]
 
     populate_calendar(
-        template_path=args.template,
+        template_path=template_path,
         output_path=args.output,
         records=records,
         channel=args.channel, # <-- NUEVO

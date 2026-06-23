@@ -1,13 +1,15 @@
 import logging
 import math
-from collections import defaultdict
-from datetime import date
+from collections import defaultdict, Counter
+from datetime import date, timedelta
+from openpyxl.styles import Font, Alignment, PatternFill
 from typing import Dict, List, Optional, Tuple
 from openpyxl.styles import Font, Alignment, PatternFill
 from services.planner_service import (
     hub_role,
     asset_is_event,
 )
+from config.content_types import MONTHLY_OVERVIEW_MAPPING
 from config.fields import AT_FIELDS
 from config.layouts import(
     DAY_ORDER,
@@ -48,48 +50,50 @@ def overview_bucket(priority: str) -> str:
 def overview_row_offset(content_type: str, priority: str) -> Optional[int]:
     ct = normalize_str(content_type)
     bucket = overview_bucket(priority)
+    
+    # 1. Búsqueda a prueba de balas (case-insensitive)
+    mapped_category = ct
+    for key, value in MONTHLY_OVERVIEW_MAPPING.items():
+        if key.lower() == ct.lower():
+            mapped_category = value
+            break
+
+    # Convertimos mapped_category y ct a minúsculas para evaluar
+    cat_low = mapped_category.lower()
+    ct_low = ct.lower()
 
     # Full Eps
-    if ct == "Full Episode":
+    if cat_low == "full episode":
         return {
-            "priority": 0,
-            "tactical": 1,
-            "evergreen": 2,
-            "acquisitions": 3,
+            "priority": 0, "tactical": 1, "evergreen": 2, "acquisitions": 3
         }.get(bucket, 0)
 
     # Exclusive Shorts
-    if ct == "Exclusive":
+    if cat_low == "exclusive":
         return 4
 
     # Scene Lifts / Sneak Peeks / Videoclips
-    if ct in {"Lift", "Musical Lift"}:
+    if cat_low == "scene lifts / sneak peeks / videoclips" or ct_low in {"lift", "musical lift", "sneak peek", "videoclip"}:
         return 5
 
     # Special Formats (Fillers)
-    if ct in {"Podcast", "Magical Moment", "Interactive", "Editorial Short"}:
+    if cat_low in {"podcast", "magical moment", "interactive", "editorial short"}:
         return 6
 
     # Compilations
-    if ct == "Compilation":
+    if cat_low == "compilation":
         return {
-            "priority": 7,
-            "tactical": 8,
-            "evergreen": 9,
-            "acquisitions": 10,
+            "priority": 7, "tactical": 8, "evergreen": 9, "acquisitions": 10
         }.get(bucket, 7)
 
     # Live Streams
-    if ct == "Live Stream":
+    if cat_low == "live stream":
         return {
-            "priority": 11,
-            "tactical": 12,
-            "evergreen": 13,
-            "acquisitions": 14,
+            "priority": 11, "tactical": 12, "evergreen": 13, "acquisitions": 14
         }.get(bucket, 11)
 
     # Vertical Shorts
-    if ct == "Vertical Short":
+    if cat_low == "vertical short":
         return 15
 
     return None
@@ -174,7 +178,22 @@ def write_overview_cell(ws, row: int, col: int, line1: str, line2: str, content_
     else:
         cell.value = new_text
 
-    fill_color = OVERVIEW_FILL_COLORS.get(normalize_str(content_type))
+    # --- RESOLVER COLOR CON MAPEO CENTRALIZADO (ALIAS SAFE) ---
+    ct_norm = normalize_str(content_type)
+    mapped_category = ct_norm
+    for key, value in MONTHLY_OVERVIEW_MAPPING.items():
+        if key.lower() == ct_norm.lower():
+            mapped_category = value
+            break
+
+    fill_color = OVERVIEW_FILL_COLORS.get(ct_norm)
+    if not fill_color:
+        # Si pertenece al bucket de Lifts/Sneak Peeks/Videoclips, forzar el color verde solicitado #A9D08E
+        if mapped_category.lower() == "scene lifts / sneak peeks / videoclips" or ct_norm.lower() in {"lift", "musical lift", "sneak peek", "videoclip"}:
+            fill_color = "FFA9D08E"
+        else:
+            fill_color = OVERVIEW_FILL_COLORS.get(mapped_category)
+
     if fill_color:
         cell.fill = PatternFill(fill_type="solid", fgColor=fill_color)
 
@@ -379,7 +398,8 @@ def write_overview_events(ws, records: List[Dict]):
 
             cell = get_writable_cell(ws, row, start_col)
             cell.value = event_text
-            cell.font = Font(italic=True, bold=False, color="FF000000")
+            # CAMBIO: color="FFFFFFFF" (Blanco) y bold=True para legibilidad
+            cell.font = Font(italic=True, bold=True, color="FFFFFFFF")
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
@@ -468,6 +488,39 @@ def populate_monthly_overview(
     # If week 5 unused, clear it
     if 5 not in used_weeks:
         clear_overview_week(ws, 5)
+
+    # --- NEW: Out-of-month Reverse Diagonal Stripe Pattern ---
+    # 1. Determinar cuál es el mes principal ("Target Month")
+    valid_dates = [parse_date(r.get("fields", r).get(AT_FIELDS["live_date"])) for r in records]
+    valid_dates = [d for d in valid_dates if d]
+    
+    if valid_dates and first_monday:
+        target_month = Counter(d.month for d in valid_dates).most_common(1)[0][0]
+
+        # En openpyxl: lightDown = Reverse Diagonal. 
+        # fgColor = color del patrón (Líneas negras). bgColor = color de fondo (Gris D9D9D9).
+        out_of_month_fill = PatternFill(fill_type="lightDown", fgColor="FF000000", bgColor="FFD9D9D9")
+        days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+        for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
+            base_row = layout["base_row"]
+            end_row = layout["end_row"]
+
+            for day_idx, day_name in enumerate(days_list):
+                col = OVERVIEW_DAY_COLS.get(day_name)
+                if not col:
+                    continue
+
+                # Calcular la fecha exacta de esta columna en el layout
+                current_date = first_monday + timedelta(days=(week_num - 1) * 7 + day_idx)
+
+                # Si el día no pertenece al mes principal, aplicamos el patrón a las filas de contenido vacías
+                if current_date.month != target_month:
+                    for row in range(base_row, end_row + 1):
+                        cell = get_writable_cell(ws, row, col)
+                        # Si la celda está vacía, aplicamos el patrón gris sin importar el formato de la plantilla
+                        if not cell.value:
+                            cell.fill = out_of_month_fill
 
     # Event row height approximation
     for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():

@@ -40,7 +40,7 @@ with st.sidebar:
     
     col_yr, col_mo = st.columns(2)
     with col_yr:
-        year = st.selectbox("📅 Year", ["2026", "2027", "2028"], index=0)
+        year = st.selectbox("📅 Year", ["2026", "2027", "2028", "2029"], index=0)
     with col_mo:
         month_number = st.selectbox(
             "📆 Month",
@@ -55,19 +55,28 @@ with st.sidebar:
     
     st.divider()
     
+    # Lógica dinámica del nombre del Template
+    if channel == "Disney Channel":
+        template_name = f"X_Social Media Calendar DC YouTube EMEA - month {year}.xltx"
+    else:
+        template_name = f"X_Social Media Calendar DJR YouTube EMEA - month {year}.xltx"
+        
+    default_template_path = f"templates/{template_name}"
+    
     # Ocultamos la complejidad técnica
     with st.expander("⚙️ Advanced Settings"):
         include_mediaplanning = st.checkbox("Include Mediaplanning", value=True)
         use_json = st.checkbox("Use local JSON", value=False)
         json_path = st.text_input("JSON path", value="data/sample_airtable.json") if use_json else None
-        template_path = st.text_input("Template path", value="templates/X_Social Media Calendar DC YouTube EMEA - month 2026.xltx")
+        
+        # El text_input ahora se alimenta de la ruta dinámica
+        template_path = st.text_input("Template path", value=default_template_path)
         output_folder = st.text_input("Output folder", value="output")
 
     st.divider()
     
-    # Botón primario en el sidebar
-    if st.button("🔍 Cargar Datos", type="primary", use_container_width=True):
-        with st.spinner("Conectando con Airtable..."):
+    if st.button("📡 Fetch Data", type="primary", use_container_width=True):
+        with st.spinner("Conectando con Airtable API..."):
             try:
                 records, channel_map = load_and_filter_records(
                     month=month_str,
@@ -82,8 +91,43 @@ with st.sidebar:
 
 # --- CONTENIDO PRINCIPAL ---
 if st.session_state.records is None:
-    # Estado inicial (Vacío)
-    st.info("👈 Por favor, selecciona la marca y el mes en el menú lateral izquierdo y haz clic en **Cargar Datos**.")
+    # Estado inicial: Dashboard Técnico (Geek Mode)
+    st.markdown("### ⚡ Sistema de Automatización de Calendarios")
+    st.info("👈 Esperando parámetros de ejecución. Selecciona el entorno en el panel izquierdo.")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_dash1, col_dash2 = st.columns([1, 1.5])
+    
+    with col_dash1:
+        st.markdown("#### 🔧 Pipeline Config")
+        # Mostramos la configuración en formato JSON para ese look "developer"
+        pipeline_config = {
+            "source": "Airtable API v1" if not st.session_state.get("use_json") else "Local JSON",
+            "target_brand": channel,
+            "target_period": month_str,
+            "engine": "openpyxl (Python 3)",
+            "template_file": template_name,
+            "status": "AWAITING_EXECUTION"
+        }
+        st.json(pipeline_config)
+        
+    with col_dash2:
+        st.markdown("#### 🏗️ Arquitectura de Exportación")
+        # Diagrama ASCII estilo consola
+        st.code('''
+[📡 Airtable] 
+     │ (Fetch JSON Payload)
+     ▼
+[🧠 Planner Service] ──(Sorting & Rules)──> [🚦 QA Engine]
+     │                                            │ (Blockers / Warnings)
+     ▼                                            ▼
+[📝 Excel Exporters] <──(openpyxl)── [📁 Templates (.xltx)]
+     │
+     ▼
+[📊 Final .xlsx Output]
+        ''', language="text")
+
 else:
     records = st.session_state.records
     

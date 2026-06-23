@@ -1,6 +1,6 @@
 @echo off
 title Disney YouTube Calendar Tool
-clear
+cls
 
 echo =======================================================
 echo ✨ ESPERA UN MOMENTO - INICIANDO CALENDAR TOOL ✨
@@ -15,7 +15,7 @@ if %errorlevel% neq 0 (
     echo.
     pause
     exit
-}
+)
 
 :: 2. Verificar o crear el Entorno Virtual (.venv) local
 if not exist ".venv" (

@@ -3,41 +3,58 @@ title Disney YouTube Calendar Tool
 cls
 
 echo =======================================================
-echo ✨ ESPERA UN MOMENTO - INICIANDO CALENDAR TOOL ✨
+echo INICIANDO CALENDAR TOOL
 echo =======================================================
 echo.
 
-:: 1. Verificar si Python está instalado
+:: 1. Comprobar si el comando 'python' funciona
 python --version >nul 2>&1
+if %errorlevel% == 0 (
+    set "PYTHON_CMD=python"
+    goto python_detectado
+)
+
+:: 2. Si no funciona, comprobar si el comando corto 'py' funciona
+py --version >nul 2>&1
+if %errorlevel% == 0 (
+    set "PYTHON_CMD=py"
+    goto python_detectado
+)
+
+:: 3. Si ninguno funciona, dar error
+echo ERROR: Python no esta detectado en este equipo.
+echo.
+echo Por favor, desinstale Python y vuelvalo a instalar
+echo ASEGURANDOSE de marcar la casilla "Add python.exe to PATH"
+echo al principio del instalador.
+echo.
+pause
+exit
+
+:python_detectado
+echo Python detectado correctamente (Comando: %PYTHON_CMD%)
+echo.
+
+:: 4. Verificar o crear el Entorno Virtual (.venv)
+if exist ".venv" goto activar_entorno
+
+echo Creando entorno virtual local (.venv) por primera vez...
+%PYTHON_CMD% -m venv .venv
 if %errorlevel% neq 0 (
-    echo ❌ ERROR: Python no esta instalado en este equipo.
-    echo Por favor, instala Python desde la Microsoft Store o python.org antes de continuar.
-    echo.
+    echo Error al crear el entorno virtual.
     pause
     exit
 )
 
-:: 2. Verificar o crear el Entorno Virtual (.venv) local
-if not exist ".venv" (
-    echo 📦 Creando entorno virtual local por primera vez...
-    python -m venv .venv
-    if %errorlevel% neq 0 (
-        echo ❌ Error al crear el entorno virtual.
-        pause
-        exit
-    )
-)
-
-:: 3. Activar el entorno virtual e instalar/actualizar librerias
-echo 🔄 Sincronizando librerias del sistema...
+:activar_entorno
+echo Sincronizando librerias del sistema...
 call .venv\Scripts\activate
-python -m pip install --upgrade pip >nul
+python -m pip install --upgrade pip --quiet
 pip install -r requirements.txt --quiet
 
-:: 4. Lanzar la aplicacion de Streamlit
 echo.
 echo =======================================================
-echo 🚀 TODO LISTO. Abriendo la aplicacion en tu navegador...
+echo TODO LISTO. Abriendo la aplicacion en tu navegador...
 echo =======================================================
 echo.
 streamlit run src/ui/streamlit_app.py

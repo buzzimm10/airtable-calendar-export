@@ -39,6 +39,7 @@ from exporters.full_calendar import (
 )
 
 from exporters.monthly_overview import populate_monthly_overview
+from exporters.full_calendar_djr import populate_calendar_djr
 
 from config.layouts import (
     TARGET_SHEET,
@@ -64,20 +65,38 @@ from services.planner_service import load_and_filter_records, aggregate_by_week_
 
 
 def populate_calendar(template_path: str, output_path: str, records: List[Dict],
+                      channel: str = "Disney Channel", 
                       week_anchor_cells: Optional[List[str]] = None,
                       enable_mediaplanning: bool = True,
                       anchor_dates_override: Optional[List[str]] = None,
                       channel_id_to_name_map: Optional[Dict[str, str]] = None):
 
+    # --- ROUTER: Delegar Disney Jr. a su propio Exporter ---
+    if channel == "Disney Jr.":
+        logging.info("Routing to Disney Jr. dedicated exporter...")
+        populate_calendar_djr(
+            template_path=template_path,
+            output_path=output_path,
+            records=records,
+            enable_mediaplanning=enable_mediaplanning,
+            channel_id_to_name_map=channel_id_to_name_map
+        )
+        return  # Terminamos aquí para no ejecutar la lógica de DC
+    # -------------------------------------------------------
+
+    # === LÓGICA DE EXPORTACIÓN PARA DISNEY CHANNEL ===
     week_anchor_cells = week_anchor_cells or ["D6", "D59", "D112", "D165", "D218"]
     if channel_id_to_name_map is None:
         channel_id_to_name_map = {}
 
     wb = load_workbook(template_path, data_only=False)
 
-    if TARGET_SHEET not in wb.sheetnames:
-        raise RuntimeError(f"Target sheet '{TARGET_SHEET}' not found in workbook.")
-    ws = wb[TARGET_SHEET]
+    active_target_sheet = "FULL CALENDAR YT DC EMEA"
+
+    if active_target_sheet not in wb.sheetnames:
+        raise RuntimeError(f"Target sheet '{active_target_sheet}' not found in workbook.")
+    
+    ws = wb[active_target_sheet]
 
     set_full_calendar_column_widths(ws)
     update_full_calendar_month_title(ws, records)
@@ -88,7 +107,6 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
         anchor_dates_map = get_anchor_dates_from_values_wb(template_path, week_anchor_cells)
 
     blocks = find_week_blocks(ws, anchor_dates_map)
-
     buckets = aggregate_by_week_day_and_role(records)
 
     start_monday = first_visible_monday_of_target_month(records)
@@ -115,7 +133,6 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
         write_week_label(ws, block, week_num_text)
         rewrite_full_calendar_owner_row(ws, block, DAY_LAYOUT)
 
-
         for day_name in DAY_ORDER:
             write_to_day_role_columns(ws, block, day_name, "Programming",
                                       per_day_role_records[(day_name, "Programming")], enable_mediaplanning)
@@ -124,8 +141,6 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
 
         write_week_deadlines_fixed(ws, block, per_day_all_roles)
         write_countries_rollout_fixed(ws, block, per_day_role_records, channel_id_to_name_map)
-
-        # reconstruir merges visuales al final de la semana
         rebuild_full_calendar_week_merges(ws, block)
 
     if target_year and target_month:
@@ -249,6 +264,7 @@ def main():
         template_path=args.template,
         output_path=args.output,
         records=records,
+        channel=args.channel, # <-- NUEVO
         week_anchor_cells=week_anchors,
         enable_mediaplanning=enable_mediaplanning,
         anchor_dates_override=args.anchor_dates,

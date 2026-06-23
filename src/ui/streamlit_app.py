@@ -12,6 +12,7 @@ if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
 from services.planner_service import load_and_filter_records, hub_role
+from services.qa_service import run_qa_on_records
 from config.fields import AT_FIELDS
 from config.styles import OVERVIEW_FILL_COLORS # <-- NUEVO
 from config.content_types import MONTHLY_OVERVIEW_MAPPING # <-- NUEVO
@@ -30,6 +31,8 @@ if "records" not in st.session_state:
     st.session_state.records = None
 if "channel_map" not in st.session_state:
     st.session_state.channel_map = {}
+if "qa_results" not in st.session_state:
+    st.session_state.qa_results = None
 
 # --- HEADER PRINCIPAL ---
 st.title("✨ Disney YouTube Calendar Tool")
@@ -104,6 +107,11 @@ with st.sidebar:
                 )
                 st.session_state.records = records
                 st.session_state.channel_map = channel_map
+                
+                # --- NUEVO: Ejecutar motor de QA inmediatamente ---
+                st.session_state.qa_results = run_qa_on_records(records)
+                # -------------------------------------------------
+                
             except Exception as e:
                 st.error(f"Error cargando datos: {str(e)}")
     # --- FIRMA / CRÉDITO ---
@@ -155,89 +163,123 @@ else:
     if len(records) == 0:
         st.warning(f"No se encontraron assets en Airtable para {channel} en el mes seleccionado.")
     else:
-    #--- 2️⃣ QA SUMMARY ---
-       # --- NUEVO: Procesamiento de Métricas (Insights) ---
+        # Recuperamos los resultados reales de QA
+        qa = st.session_state.get("qa_results", {"blockers": [], "warnings": [], "info": []})
+        num_blockers = len(qa["blockers"])
+        num_warnings = len(qa["warnings"])
+        num_info = len(qa["info"])
+
+        # --- PROCESAMIENTO DE MÉTRICAS (Filtrando EVENT radicalmente) ---
         hub_counts = Counter()
         ct_counts = Counter()
+        total_content_assets = 0  # Contador exclusivo de contenidos reales
 
         for r in records:
             f = r.get("fields", r)
+            ct = f.get(AT_FIELDS["content_type"], "")
             
-            # 1. Contar Hubs
+            # SI ES UN EVENTO, SE IGNORA PARA LAS TARJETAS Y DESGLOSE VISUAL
+            if str(ct).strip().upper() == "EVENT":
+                continue
+                
+            total_content_assets += 1
+            
             raw_hub = f.get(AT_FIELDS["owner_hub"])
-            # Usamos tu función hub_role para saber si es Programming o Mediaplanning
             role = hub_role(raw_hub)
             if role:
                 hub_counts[role] += 1
             else:
                 hub_counts["Other/Ignored"] += 1
 
-            # 2. Contar Content Types (Excluyendo EVENT)
-            ct = f.get(AT_FIELDS["content_type"], "Missing Type")
-            # Ignoramos mayúsculas/minúsculas para asegurar que atrape todos los eventos
-            if str(ct).strip().upper() != "EVENT":
+            if ct:
                 ct_counts[ct] += 1
 
         # --- 2️⃣ INSIGHTS & QA SUMMARY ---
         st.subheader("2️⃣ Insights & QA")
         
-        # Fila 1: Distribución por Hub
+        # Fila 1: Distribución por Hub (Muestra datos reales sin EVENT)
         st.markdown("##### 🎬 Distribución de Assets")
         hub_col1, hub_col2, hub_col3 = st.columns(3)
-        hub_col1.metric("Total Assets", len(records))
+        hub_col1.metric("Total Assets", total_content_assets)
         hub_col2.metric("📺 Programming Hub", hub_counts.get("Programming", 0))
         hub_col3.metric("📱 Mediaplanning Hub", hub_counts.get("Mediaplanning", 0))
         
-        # Expander para ver el detalle de Content Types CON COLORES
         with st.expander("📊 Ver desglose por Content Type", expanded=False):
             ct_df = pd.DataFrame(ct_counts.items(), columns=["Content Type", "Count"])
             ct_df = ct_df.sort_values(by="Count", ascending=False)
             
-            # Función para pintar las celdas usando la misma lógica de Excel
+            # FIX: Función de pintado Case-Insensitive
             def style_content_type(val):
                 ct_norm = str(val).strip()
                 mapped_category = ct_norm
                 
-                # Buscar en la configuración
+                # 1. Resolver alias de forma insensible a mayúsculas
                 for key, value in MONTHLY_OVERVIEW_MAPPING.items():
                     if key.lower() == ct_norm.lower():
                         mapped_category = value
                         break
                 
-                # Obtener color base
-                fill_color = OVERVIEW_FILL_COLORS.get(ct_norm)
+                # 2. Búsqueda insensible a mayúsculas en OVERVIEW_FILL_COLORS
+                fill_color = None
+                for key, color in OVERVIEW_FILL_COLORS.items():
+                    if key.lower() == ct_norm.lower():
+                        fill_color = color
+                        break
                 
                 if not fill_color:
-                    # Lógica para Lifts/Sneak Peeks (Verde claro)
+                    for key, color in OVERVIEW_FILL_COLORS.items():
+                        if key.lower() == mapped_category.lower():
+                            fill_color = color
+                            break
+                
+                # 3. Fallback histórico para celdas verdes (Lifts/Sneak peeks)
+                if not fill_color:
                     if mapped_category.lower() == "scene lifts / sneak peeks / videoclips" or ct_norm.lower() in {"lift", "musical lift", "sneak peek", "videoclip"}:
                         fill_color = "FFA9D08E"
                     else:
-                        fill_color = OVERVIEW_FILL_COLORS.get(mapped_category, "FFFFFFFF")
+                        fill_color = "FFFFFFFF"
                 
-                # --- FIX: Convertir ARGB a RGB válido para CSS ---
-                # Si el color tiene 8 caracteres (ej. FFA9D08E), ignoramos los dos primeros (FF)
+                # Convertir ARGB/RGB a CSS hex estándar
                 if isinstance(fill_color, str) and len(fill_color) == 8:
                     css_color = f"#{fill_color[2:]}"
                 elif isinstance(fill_color, str) and len(fill_color) == 6:
                     css_color = f"#{fill_color}"
                 else:
-                    css_color = "#FFFFFF" # Fallback a blanco
+                    css_color = "#FFFFFF"
                     
                 return f"background-color: {css_color}; color: #000000; font-weight: bold;"
 
-            # Aplicamos el estilo de pandas (Styler) a la columna
             styled_df = ct_df.style.map(style_content_type, subset=["Content Type"])
             st.dataframe(styled_df, hide_index=True, use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Fila 2: QA Engine (Blockers & Warnings - Mock por ahora)
+        # Fila 2: QA Engine (DATOS REALES)
         st.markdown("##### 🚦 Estado de Validación (QA)")
         qa_col1, qa_col2, qa_col3 = st.columns(3)
-        qa_col1.metric("🛑 Blockers", "0")
-        qa_col2.metric("⚠️ Warnings", "0")
-        qa_col3.metric("ℹ️ Info", "0")
         
+        # Usamos delta_color para resaltar si hay blockers
+        qa_col1.metric("🛑 Blockers", num_blockers, delta=f"-{num_blockers}" if num_blockers > 0 else None, delta_color="inverse")
+        qa_col2.metric("⚠️ Warnings", num_warnings)
+        qa_col3.metric("ℹ️ Info", num_info)
+        
+        # DESGLOSE DE ALERTAS DE QA (Solo se muestran los expanders si hay mensajes)
+        if num_blockers > 0:
+            with st.container(): # <-- CORREGIDO AQUÍ
+                st.markdown("###### ❌ Corrige los siguientes Blockers para poder exportar:")
+                for b in qa["blockers"]:
+                    st.error(b)
+
+        if num_warnings > 0:
+            with st.expander(f"⚠️ Ver {num_warnings} Warnings", expanded=False):
+                for w in qa["warnings"]:
+                    st.warning(w)
+
+        if num_info > 0:
+            with st.expander(f"ℹ️ Ver {num_info} Notas de Información", expanded=False):
+                for i in qa["info"]:
+                    st.info(i)
+
         # PREVIEW DATA
         with st.expander("👀 Auditar datos extraídos (Data Preview)", expanded=False):
             preview_data = []
@@ -258,11 +300,16 @@ else:
         output_filename = f"calendar_{channel.lower().replace(' ', '_')}_{month_str.lower()}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         output_path = os.path.join(output_folder, output_filename)
         
-        # Usamos columnas para que el botón no sea absurdamente ancho
-        btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 2])
+        btn_col1, btn_col2, _ = st.columns([1, 1, 2])
         
         with btn_col1:
-            if st.button("🚀 Generar Excel", type="primary", use_container_width=True):
+            # INTERCEPTOR CRÍTICO: Si num_blockers > 0, el botón se deshabilita automáticamente
+            button_disabled = num_blockers > 0
+            
+            if button_disabled:
+                st.markdown("⚠️ **Exportación bloqueada.** Revisa las alertas rojas de arriba.")
+            
+            if st.button("🚀 Generar Excel", type="primary", use_container_width=True, disabled=button_disabled):
                 with st.spinner("Escribiendo Excel... No cierres esta ventana."):
                     try:
                         os.makedirs(output_folder, exist_ok=True)
@@ -270,7 +317,7 @@ else:
                             records=records,
                             template_path=template_path,
                             output_path=output_path,
-                            channel=channel, # <-- ESTO ES VITAL
+                            channel=channel,
                             enable_mediaplanning=include_mediaplanning,
                             channel_id_to_name_map=st.session_state.channel_map
                         )
@@ -280,7 +327,6 @@ else:
                     except Exception as e:
                         st.error(f"Error generando Excel: {str(e)}")
         
-        # Si el excel se generó bien, mostramos el botón de descarga al lado
         if st.session_state.get("export_success", False):
             with btn_col2:
                 with open(st.session_state.output_path, "rb") as file:

@@ -1,0 +1,73 @@
+DJR_SHEET_COUNTRIES = [
+    "France",
+    "GSA (German)",
+    "Italy",
+    "Middle East (Arabic)",
+    "Poland",
+    "Spain",
+    "Bulgaria",
+    "Greece",
+    "Israel (Hebrew)",
+    "Netherlands (Dutch)",
+    "Portugal",
+    "Romania",
+    "Türkiye",
+    "Sweden (Swedish)",
+    "Denmark (Danish)",
+    "Norway",
+]
+
+DJR_COUNTRY_SHORT_NAMES = {
+    "Middle East (Arabic)": "MENA",
+    "GSA (German)": "GSA",
+    "Israel (Hebrew)": "Israel",
+    "Netherlands (Dutch)": "Netherlands",
+    "Sweden (Swedish)": "Sweden",
+}
+
+DJR_REGION_PRESETS = {
+    "tier a": {
+        "France",
+        "GSA (German)",
+        "Italy",
+        "Middle East (Arabic)",
+        "Poland",
+        "Spain",
+    },
+    "tier b": {
+        "Bulgaria",
+        "Greece",
+        "Israel (Hebrew)",
+        "Netherlands (Dutch)",
+        "Portugal",
+        "Romania",
+        "Türkiye",
+    },
+    "tier c": {
+        "Sweden (Swedish)",
+        "Denmark (Danish)",
+        "Norway",
+    },
+    "a": {
+        "France",
+        "GSA (German)",
+        "Italy",
+        "Middle East (Arabic)",
+        "Poland",
+        "Spain",
+    },
+    "b": {
+        "Bulgaria",
+        "Greece",
+        "Israel (Hebrew)",
+        "Netherlands (Dutch)",
+        "Portugal",
+        "Romania",
+        "Türkiye",
+    },
+    "c": {
+        "Sweden (Swedish)",
+        "Denmark (Danish)",
+        "Norway",
+    },
+}

@@ -130,7 +130,7 @@ The app is intended to let users select:
 ---
 
 ## Current Notes
-- Brand is now the Airtable field used to separate Disney Channel and Disney Jr.
+- Brand is now the Airtable field used to separate Disney Channel and Disney Junior
 - The script still uses the CLI argument --channel for compatibility, but internally this should be refactored to --brand.
 - Excluded Markets replaces the previous Notes-based exception logic.
 - Excluded markets are appended automatically to the Excel Comments section as Except France, Except MENA, etc.

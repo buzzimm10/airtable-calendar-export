@@ -5,7 +5,7 @@ BRAND_CONFIG = {
         "country_set": "...",
     },
 
-    "Disney Jr.": {
+    "Disney Junior": {
         ...
     }
 }

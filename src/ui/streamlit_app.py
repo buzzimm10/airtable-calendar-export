@@ -42,7 +42,7 @@ st.divider()
 # --- SIDEBAR (CONTROLES) ---
 with st.sidebar:
     st.header("1️⃣ Configuración")
-    channel = st.selectbox("📺 Brand", ["Disney Channel", "Disney Jr."], index=0)
+    channel = st.selectbox("📺 Brand", ["Disney Channel", "Disney Junior"], index=0)
     
     col_yr, col_mo = st.columns(2)
     

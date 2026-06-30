@@ -8,7 +8,7 @@ TEMPLATE_CONFIG = {
         "week_anchor_cells": ["D6", "D59", "D112", "D165", "D218"],
         "supports_monthly_overview": True,
     },
-    "Disney Jr.": {
+    "Disney Junior": {
         "template_path": Path("templates/X_Social Media Calendar DJR YouTube EMEA - month YYYY.xltx"),
         "full_calendar_sheet": "FULL CALENDAR YT DJR EMEA",
         "monthly_overview_sheet": "MONTHLY OVERVIEW YT DJR EMEA",

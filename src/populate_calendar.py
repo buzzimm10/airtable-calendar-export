@@ -71,9 +71,9 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
                       anchor_dates_override: Optional[List[str]] = None,
                       channel_id_to_name_map: Optional[Dict[str, str]] = None):
 
-    # --- ROUTER: Delegar Disney Jr. a su propio Exporter ---
-    if channel == "Disney Jr.":
-        logging.info("Routing to Disney Jr. dedicated exporter...")
+    # --- ROUTER: Delegar Disney Junior a su propio Exporter ---
+    if channel == "Disney Junior":
+        logging.info("Routing to Disney Junior dedicated exporter...")
         populate_calendar_djr(
             template_path=template_path,
             output_path=output_path,
@@ -180,7 +180,7 @@ def main():
     parser.add_argument("--anchors", nargs="*", help="Override weekly anchor cells, e.g., D6 D59 D112 D165 D218.")
     parser.add_argument("--anchor-dates", nargs="*", help="Optional ISO dates for anchors.")
     parser.add_argument("--disable-mediaplanning", action="store_true", help="If set, do not populate Mediaplanning Hub content.")
-    parser.add_argument("--channel", default="Disney Channel", help='Filter by Brand, e.g. "Disney Channel", "Disney Jr.".')
+    parser.add_argument("--channel", default="Disney Channel", help='Filter by Brand, e.g. "Disney Channel", "Disney Junior".')
     parser.add_argument("--month", help='Filter by "Month" (optional, case-insensitive).')
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR).")
     args = parser.parse_args()

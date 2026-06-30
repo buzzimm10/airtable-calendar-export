@@ -2201,7 +2201,7 @@ def main():
     parser.add_argument("--anchors", nargs="*", help="Override weekly anchor cells, e.g., D6 D59 D112 D165 D218.")
     parser.add_argument("--anchor-dates", nargs="*", help="Optional ISO dates for anchors.")
     parser.add_argument("--disable-mediaplanning", action="store_true", help="If set, do not populate Mediaplanning Hub content.")
-    parser.add_argument("--channel", default="Disney Channel", help='Filter by "Channel" (e.g., "Disney Channel", "Disney Jr.").')
+    parser.add_argument("--channel", default="Disney Channel", help='Filter by "Channel" (e.g., "Disney Channel", "Disney Junior").')
     parser.add_argument("--month", help='Filter by "Month" (optional, case-insensitive).')
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR).")
     args = parser.parse_args()

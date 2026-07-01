@@ -210,21 +210,43 @@ def write_djr_country_rollout(ws, layout, column_map, record, col, channel_id_to
     country_start, country_end = layout["country_rows"]
     status_start, status_end = layout["status_rows"]
 
+    # Definición de Tiers (Ajusta los nombres exactos si difieren en tu DJR_SHEET_COUNTRIES)
+    TIER_B_COUNTRIES = {"Poland", "Romania", "Netherlands (Dutch)", "Portugal", "Sweden (Swedish)", "Denmark (Danish)", "Norway", "Bulgaria"}
+    # Tier A y C usarán el mismo color (EDEDED), por lo que se agrupan en el bloque 'else' del YES.
+
+    # Rellenos (Fills)
+    FILL_TIER_A_C_YES = PatternFill(fill_type="solid", fgColor="EDEDED")
+    FILL_TIER_B_YES = PatternFill(fill_type="solid", fgColor="FFFFFF")
+    FILL_GREEN_YES = PatternFill(fill_type="solid", fgColor="00B050")
+
     for idx, country in enumerate(DJR_SHEET_COUNTRIES):
         rollout_row = country_start + idx
         status_row = status_start + idx
 
         value = "YES" if country in included else "NO"
 
+        # 1. Lógica para Mediaplanning (Mantiene el original Verde / Letra Roja)
         if value == "YES":
-            font = Font(color="FFFFFFFF", bold=True)
-            fill = PatternFill(fill_type="solid", fgColor="00B050")
+            font_rollout = Font(color="FFFFFFFF", bold=True)
+            fill_rollout = FILL_GREEN_YES
         else:
-            font = Font(color="FFFF0000", bold=True)
-            fill = None
+            font_rollout = Font(color="FFFF0000", bold=True)
+            fill_rollout = None 
 
-        safe_set_value(ws, rollout_row, col, value, alignment=center_wrap(), font=font, fill=fill)
-        safe_set_value(ws, status_row, col, value, alignment=center_wrap(), font=font, fill=fill)
+        safe_set_value(ws, rollout_row, col, value, alignment=center_wrap(), font=font_rollout, fill=fill_rollout)
+
+        # 2. Lógica para Status Conforming (Gris/Blanco por Tiers)
+        if value == "YES":
+            font_status = Font(color="00000000", bold=True) # Letra oscura para contraste
+            if country in TIER_B_COUNTRIES:
+                fill_status = FILL_TIER_B_YES
+            else:
+                fill_status = FILL_TIER_A_C_YES
+        else:
+            font_status = Font(color="FFFF0000", bold=True)
+            fill_status = None 
+
+        safe_set_value(ws, status_row, col, value, alignment=center_wrap(), font=font_status, fill=fill_status)
 
 def rebuild_djr_week_merges(ws, layout):
     rows_to_rebuild = [
@@ -333,9 +355,14 @@ def populate_calendar_djr(
     write_djr_month_title(ws, records)
 
     first_monday = first_visible_monday_of_target_month(records)
-    if first_monday:
-        write_djr_start_date(ws, first_monday)
+    
+    # 1. Validación estricta para tranquilizar al Type Checker
+    if not first_monday:
+        logging.warning("No se pudo determinar el primer lunes. Abortando generación.")
+        return
 
+    # 2. Como ya pasó el 'if', Python sabe que first_monday es 'date' 100% seguro
+    write_djr_start_date(ws, first_monday)
     print("DJR first_monday:", first_monday)
 
     buckets = aggregate_by_visual_week_day_role(records, first_monday)

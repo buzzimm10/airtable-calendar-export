@@ -34,7 +34,7 @@ from services.planner_service import (
 )
 from exporters.monthly_overview_djr import populate_monthly_overview_djr
 from exporters.shared.records import aggregate_by_visual_week_day_role  
-from core.text_formatting import process_multiline_branding
+from core.text_formatting import process_multiline_branding, markdown_to_richtext
 from core.excel_utils import safe_set_value, center_wrap
 from config.fields import AT_FIELDS
 import warnings
@@ -134,6 +134,7 @@ def write_djr_week_number(ws, layout, week_monday):
 def write_djr_branding(ws, layout, col, record):
     """
     Inyecta la sección BRANDING en DJR respetando las reglas de filas y Markdown.
+    Pasa absolutamente todos los campos por markdown_to_richtext.
     """
     branding_layout = layout.get("branding_rows")
     if not branding_layout:
@@ -143,9 +144,12 @@ def write_djr_branding(ws, layout, col, record):
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
-    # Helper interno para escribir aplicando RichText de forma segura
+    # Forzamos la escritura directa usando ws.cell para que openpyxl acepte el RichText puro
     def _set_rich_cell(row, column, text_val, alignment):
+        if not row:
+            return
         cell = ws.cell(row=row, column=column)
+        # ---> AQUÍ OCURRE LA MAGIA DEL BOLD/ITALIC <---
         cell.value = markdown_to_richtext(text_val)
         cell.alignment = alignment
 
@@ -159,7 +163,7 @@ def write_djr_branding(ws, layout, col, record):
     for idx, row in enumerate(branding_layout["bug"]):
         _set_rich_cell(row, col, bug_lines[idx], align_center)
 
-    # 3. COPYRIGHT: 1 sola fila con todo el bloque de texto (\n interno)
+    # 3. COPYRIGHT: 1 sola fila con todo el bloque de texto (\n interno), alineado a la IZQUIERDA
     copyright_text = f.get(AT_FIELDS["branding_copyright"], "")
     _set_rich_cell(branding_layout["copyright"], col, copyright_text, align_left)
 
@@ -193,7 +197,14 @@ def write_djr_asset_to_col(ws, layout, col, record):
     role = hub_role(record.get(AT_FIELDS["owner_hub"]))
     comments_row = layout["comments_rows"].get(role)
     if comments_row:
-        safe_set_value(ws, comments_row, col, single["comments"], alignment=center_wrap())
+        # APLICAMOS EL PARSEADOR AL COMENTARIO AQUÍ:
+        safe_set_value(
+            ws, 
+            comments_row, 
+            col, 
+            markdown_to_richtext(single["comments"]), 
+            alignment=center_wrap()
+        )
 
 
 def write_djr_deadline(ws, layout, day_name, records):

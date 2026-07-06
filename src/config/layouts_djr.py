@@ -68,3 +68,22 @@ DJR_WEEK_LAYOUT = {
     5: {"start_row": 254, "date_row": 255, "deadline_row": 256, "owner_row": 257, "property_row": 258, "content_type_row": 259, "title_row": 260, "synopsis_row": 261, "strategy_row": 262, "country_rows": (263, 278), "tx_row": 279, "tc_row": 280, "branding_rows": (281, 294), "comments_rows": {"Programming": 295, "Mediaplanning": 296, "UK": 297}, "status_rows": (298, 313), "status_comments_row": 314},
 }
 
+DJR_BRANDING_LAYOUT = {
+    "watermark": [33, 34, 35, 36], # 4 filas
+    "bug": [37, 38, 39],           # 3 filas
+    "copyright": 40,               # 1 fila (int)
+    "endcard": [41, 42, 43, 44, 45, 46] # 6 filas
+}
+
+# Inyección dinámica de las filas de BRANDING para Disney Junior (Offset: 62)
+for week_num in range(1, 6):
+    offset = (week_num - 1) * 62
+    
+    # Nos aseguramos de que la clave exista antes de inyectar
+    if week_num in DJR_WEEK_LAYOUT:
+        DJR_WEEK_LAYOUT[week_num]["branding_rows"] = {
+            "watermark": [33 + offset, 34 + offset, 35 + offset, 36 + offset],
+            "bug": [37 + offset, 38 + offset, 39 + offset],
+            "copyright": 40 + offset,  # Int directo
+            "endcard": [41 + offset, 42 + offset, 43 + offset, 44 + offset, 45 + offset, 46 + offset]
+        }

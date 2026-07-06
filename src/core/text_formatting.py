@@ -44,3 +44,25 @@ def replace_month_in_title(text: str, month_name_upper: str) -> str:
 def join_comments(*parts: str) -> str:
     cleaned = [normalize_str(p) for p in parts if normalize_str(p)]
     return " | ".join(cleaned)
+
+def process_multiline_branding(text: str, max_lines: int) -> list:
+    """
+    Toma un texto con saltos de línea (\n), lo divide y rellena con 
+    strings vacíos ("") si faltan líneas, o recorta si sobran,
+    asegurando que siempre devuelva exactamente 'max_lines' elementos.
+    """
+    if not text:
+        return [""] * max_lines
+        
+    # Separar por saltos de línea reales de Airtable
+    lines = str(text).split('\n')
+    
+    # Limpiar espacios extra
+    lines = [line.strip() for line in lines]
+    
+    # Rellenar con blancos si faltan líneas
+    if len(lines) < max_lines:
+        lines.extend([""] * (max_lines - len(lines)))
+        
+    # Recortar si sobran líneas (evita desbordamientos en Excel)
+    return lines[:max_lines]

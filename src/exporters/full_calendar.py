@@ -98,6 +98,20 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
         )
 
+    # --- LÓGICA DINÁMICA DE BRANDING ---
+    # Calculamos las filas de branding dinámicamente relativas a tc_row
+    # Esto sobrevive a cualquier cambio futuro en la plantilla de DC
+    branding_layout_dict = None
+    if block.tc_row:
+        branding_layout_dict = {
+            "branding_rows": {
+                "watermark": block.tc_row + 1,
+                "bug": [block.tc_row + 2, block.tc_row + 3],
+                "endcard": [block.tc_row + 4, block.tc_row + 5]
+            }
+        }
+    # -----------------------------------
+
     if role == "Programming":
         # máximo 2 contenidos, uno por columna
         for idx, record in enumerate(records[:2]):
@@ -111,6 +125,11 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.strategy_row, col, single["strategy"])
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
+            
+            # ---> INYECTOR DE BRANDING DC <---
+            if branding_layout_dict:
+                write_dc_branding(ws, branding_layout_dict, col, record)
+
             _write(block.comments_row, col, single["comments"])
 
     elif role == "Mediaplanning":
@@ -136,6 +155,11 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.strategy_row, col, single["strategy"])
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
+            
+            # ---> INYECTOR DE BRANDING DC <---
+            if branding_layout_dict:
+                write_dc_branding(ws, branding_layout_dict, col, record)
+
             _write(block.comments_row, col, single["comments"])
 
             # si el segundo contenido va en UK, cambiar cabecera OWNER a MEDIAPLANNING HUB
@@ -362,6 +386,41 @@ def write_full_calendar_start_date(ws, start_monday: date):
         alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
         number_format="dddd, dd mmmm yyyy",
     )
+
+from core.text_formatting import process_multiline_branding
+from core.excel_utils import safe_set_value, center_wrap
+from config.fields import AT_FIELDS
+
+def write_dc_branding(ws, layout, col, record):
+    """
+    Inyecta la sección de BRANDING para Disney Channel.
+    No incluye Copyright y compacta el Watermark.
+    """
+    branding_layout = layout.get("branding_rows")
+    if not branding_layout:
+        return
+        
+    f = record.get("fields", record)
+    
+    # 1. WATERMARK (1 Fila, texto completo con saltos internos)
+    watermark_text = f.get(AT_FIELDS["branding_watermark"], "")
+    safe_set_value(
+        ws, 
+        branding_layout["watermark"], 
+        col, 
+        str(watermark_text).strip() if watermark_text else "", 
+        alignment=center_wrap()
+    )
+
+    # 2. BUG (2 Filas separadas)
+    bug_lines = process_multiline_branding(f.get(AT_FIELDS["branding_bug"]), max_lines=2)
+    for idx, row in enumerate(branding_layout["bug"]):
+        safe_set_value(ws, row, col, bug_lines[idx], alignment=center_wrap())
+
+    # 3. ENDCARD (2 Filas separadas)
+    endcard_lines = process_multiline_branding(f.get(AT_FIELDS["branding_endcard"]), max_lines=2)
+    for idx, row in enumerate(branding_layout["endcard"]):
+        safe_set_value(ws, row, col, endcard_lines[idx], alignment=center_wrap())
 
 def update_full_calendar_month_title(ws, records: List[Dict]):
     """

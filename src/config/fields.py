@@ -24,4 +24,8 @@ AT_FIELDS = {
     "brand": "Brand",
     "title": "YouTube Title",
     "excluded_markets": "Excluded Markets",
+    "branding_watermark": "Watermark",
+    "branding_bug": "Bug",
+    "branding_copyright": "Copyright",
+    "branding_endcard": "Endcard",
 }

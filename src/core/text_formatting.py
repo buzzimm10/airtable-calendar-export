@@ -71,31 +71,53 @@ def process_multiline_branding(text: str, max_lines: int) -> list:
 
 def markdown_to_richtext(text: str):
     """
-    Parsea strings con formato Markdown de doble asterisco (**negrita**)
-    y devuelve un objeto CellRichText compatible con openpyxl.
-    Mantiene intactos los saltos de línea (\\n) y espacios.
+    Parsea strings con marcadores Markdown (*, **, _)
+    y los convierte en CellRichText activando negritas y/o cursivas.
+    Soporta formatos combinados como **_texto_**.
     """
     if not text:
         return ""
     
     text_str = str(text)
-    if '**' not in text_str:
-        return text_str  # Si no hay negritas, devuelve el string plano limpio
+    
+    # Si no hay ningún marcador, devolvemos el texto plano rápidamente
+    if not any(marker in text_str for marker in ['*', '_']):
+        return text_str
 
-    # Separar por el delimitador de doble asterisco
-    parts = text_str.split('**')
+    # Expresión regular que divide el texto EXACTAMENTE por sus marcadores
+    # Conserva los símbolos en la lista para que podamos evaluarlos
+    parts = re.split(r'(\*\*|\*|_)', text_str)
+    
     rich_text = CellRichText()
-    bold_font = InlineFont(b=True)
+    is_bold = False
+    is_italic = False
 
-    for i, part in enumerate(parts):
+    for part in parts:
         if not part:
-            continue  # Ignora bloques vacíos generados por asteriscos al inicio/final
-        
-        # En una división por '**', los índices impares siempre corresponden 
-        # al texto que se encontraba encerrado entre las negritas
-        if i % 2 == 1:
-            rich_text.append(TextBlock(font=bold_font, text=part))
+            continue
+            
+        # Si detectamos asteriscos, invertimos el estado de negrita (On/Off)
+        if part in ('**', '*'):
+            is_bold = not is_bold
+            
+        # Si detectamos un guion bajo, invertimos el estado de cursiva (On/Off)
+        elif part == '_':
+            is_italic = not is_italic
+            
         else:
-            rich_text.append(part)
+            # Es un fragmento de texto real (palabras/espacios)
+            if is_bold or is_italic:
+                # Aplicamos la combinación exacta de estilos que esté activa
+                font = InlineFont(b=is_bold, i=is_italic)
+                rich_text.append(TextBlock(font=font, text=part))
+            else:
+                # Texto normal
+                rich_text.append(part)
+
+    # Validaciones de seguridad por si el texto resultante queda extraño
+    if len(rich_text) == 0:
+        return ""
+    if len(rich_text) == 1 and isinstance(rich_text[0], str):
+        return rich_text[0]
 
     return rich_text

@@ -1,5 +1,7 @@
 import re
 from typing import List, Optional
+from openpyxl.cell.text import InlineFont
+from openpyxl.cell.rich_text import TextBlock, CellRichText
 
 
 def normalize_str(s: Optional[str]) -> str:
@@ -66,3 +68,26 @@ def process_multiline_branding(text: str, max_lines: int) -> list:
         
     # Recortar si sobran líneas (evita desbordamientos en Excel)
     return lines[:max_lines]
+
+def markdown_to_richtext(text: str):
+    """
+    Convierte un texto con asteriscos (*negrita*) en un objeto CellRichText
+    para que Excel lo pinte con negritas parciales en la misma celda.
+    """
+    if not text or '*' not in str(text):
+        return str(text) if text else ""
+        
+    chunks = str(text).split('*')
+    rich_text = CellRichText()
+    bold_font = InlineFont(b=True)
+    
+    for i, chunk in enumerate(chunks):
+        if not chunk:
+            continue
+        # Los índices impares son los que estaban entre asteriscos
+        if i % 2 == 1:
+            rich_text.append(TextBlock(font=bold_font, text=chunk))
+        else:
+            rich_text.append(chunk)
+            
+    return rich_text

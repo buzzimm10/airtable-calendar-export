@@ -7,6 +7,8 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 
+from core.text_formatting import process_multiline_branding, markdown_to_richtext
+
 from config.fields import AT_FIELDS
 from config.layouts import DAY_ORDER
 from config.layouts_djr import (
@@ -32,6 +34,9 @@ from services.planner_service import (
 )
 from exporters.monthly_overview_djr import populate_monthly_overview_djr
 from exporters.shared.records import aggregate_by_visual_week_day_role  
+from core.text_formatting import process_multiline_branding
+from core.excel_utils import safe_set_value, center_wrap
+from config.fields import AT_FIELDS
 import warnings
 
 warnings.filterwarnings("ignore", message="wmf image format is not supported.*")
@@ -126,6 +131,43 @@ def write_djr_week_number(ws, layout, week_monday):
     safe_set_value(ws, layout["date_row"], 2, "WEEK", alignment=center_wrap())
     safe_set_value(ws, layout["date_row"], 3, week_num, alignment=center_wrap())
 
+def write_djr_branding(ws, layout, col, record):
+    """
+    Inyecta la sección de BRANDING para Disney Junior respetando
+    las filas asignadas y los saltos de línea.
+    """
+    branding_layout = layout.get("branding_rows")
+    if not branding_layout:
+        return
+        
+    f = record.get("fields", record)
+    
+    # 1. WATERMARK (4 Filas separadas)
+    watermark_lines = process_multiline_branding(f.get(AT_FIELDS["branding_watermark"]), max_lines=4)
+    for idx, row in enumerate(branding_layout["watermark"]):
+        safe_set_value(ws, row, col, watermark_lines[idx], alignment=center_wrap())
+
+    # 2. BUG (3 Filas separadas)
+    bug_lines = process_multiline_branding(f.get(AT_FIELDS["branding_bug"]), max_lines=3)
+    for idx, row in enumerate(branding_layout["bug"]):
+        safe_set_value(ws, row, col, bug_lines[idx], alignment=center_wrap())
+
+    # 3. COPYRIGHT (1 Fila, alineado a la izquierda, con negritas parciales)
+    copyright_text = f.get(AT_FIELDS["branding_copyright"], "")
+    if copyright_text:
+        copy_row = branding_layout["copyright"]
+        cell = ws.cell(row=copy_row, column=col)
+        
+        # Aplicamos la magia del RichText
+        cell.value = markdown_to_richtext(copyright_text)
+        
+        # Alineación: Izquierda (left) y centrado verticalmente
+        cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+    # 4. ENDCARD (6 Filas separadas)
+    endcard_lines = process_multiline_branding(f.get(AT_FIELDS["branding_endcard"]), max_lines=6)
+    for idx, row in enumerate(branding_layout["endcard"]):
+        safe_set_value(ws, row, col, endcard_lines[idx], alignment=center_wrap())
 
 def write_djr_asset_to_col(ws, layout, col, record):
     single = assemble_text_for_single_asset(record)
@@ -252,45 +294,6 @@ def write_djr_country_rollout(ws, layout, column_map, record, col, channel_id_to
 
         safe_set_value(ws, status_row, col, value, alignment=center_wrap(), font=font_status, fill=fill_status)
 
-from core.text_formatting import process_multiline_branding
-from core.excel_utils import safe_set_value, center_wrap
-from config.fields import AT_FIELDS
-
-def write_djr_branding(ws, layout, col, record):
-    """
-    Inyecta la sección de BRANDING para Disney Junior respetando
-    las filas asignadas y los saltos de línea.
-    """
-    branding_layout = layout.get("branding_rows")
-    if not branding_layout:
-        return
-        
-    f = record.get("fields", record)
-    
-    # 1. WATERMARK (4 Filas separadas)
-    watermark_lines = process_multiline_branding(f.get(AT_FIELDS["branding_watermark"]), max_lines=4)
-    for idx, row in enumerate(branding_layout["watermark"]):
-        safe_set_value(ws, row, col, watermark_lines[idx], alignment=center_wrap())
-
-    # 2. BUG (3 Filas separadas)
-    bug_lines = process_multiline_branding(f.get(AT_FIELDS["branding_bug"]), max_lines=3)
-    for idx, row in enumerate(branding_layout["bug"]):
-        safe_set_value(ws, row, col, bug_lines[idx], alignment=center_wrap())
-
-    # 3. COPYRIGHT (1 Fila, texto completo con saltos de línea internos)
-    copyright_text = f.get(AT_FIELDS["branding_copyright"], "")
-    safe_set_value(
-        ws, 
-        branding_layout["copyright"], 
-        col, 
-        str(copyright_text).strip() if copyright_text else "", 
-        alignment=center_wrap() # Esto aplica wrap_text=True automáticamente
-    )
-
-    # 4. ENDCARD (6 Filas separadas)
-    endcard_lines = process_multiline_branding(f.get(AT_FIELDS["branding_endcard"]), max_lines=6)
-    for idx, row in enumerate(branding_layout["endcard"]):
-        safe_set_value(ws, row, col, endcard_lines[idx], alignment=center_wrap())
 
 def rebuild_djr_week_merges(ws, layout):
     rows_to_rebuild = [

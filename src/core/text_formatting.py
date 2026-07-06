@@ -71,23 +71,31 @@ def process_multiline_branding(text: str, max_lines: int) -> list:
 
 def markdown_to_richtext(text: str):
     """
-    Convierte un texto con asteriscos (*negrita*) en un objeto CellRichText
-    para que Excel lo pinte con negritas parciales en la misma celda.
+    Parsea strings con formato Markdown de doble asterisco (**negrita**)
+    y devuelve un objeto CellRichText compatible con openpyxl.
+    Mantiene intactos los saltos de línea (\\n) y espacios.
     """
-    if not text or '*' not in str(text):
-        return str(text) if text else ""
-        
-    chunks = str(text).split('*')
+    if not text:
+        return ""
+    
+    text_str = str(text)
+    if '**' not in text_str:
+        return text_str  # Si no hay negritas, devuelve el string plano limpio
+
+    # Separar por el delimitador de doble asterisco
+    parts = text_str.split('**')
     rich_text = CellRichText()
     bold_font = InlineFont(b=True)
-    
-    for i, chunk in enumerate(chunks):
-        if not chunk:
-            continue
-        # Los índices impares son los que estaban entre asteriscos
+
+    for i, part in enumerate(parts):
+        if not part:
+            continue  # Ignora bloques vacíos generados por asteriscos al inicio/final
+        
+        # En una división por '**', los índices impares siempre corresponden 
+        # al texto que se encontraba encerrado entre las negritas
         if i % 2 == 1:
-            rich_text.append(TextBlock(font=bold_font, text=chunk))
+            rich_text.append(TextBlock(font=bold_font, text=part))
         else:
-            rich_text.append(chunk)
-            
+            rich_text.append(part)
+
     return rich_text

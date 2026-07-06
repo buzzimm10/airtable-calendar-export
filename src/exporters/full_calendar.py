@@ -17,6 +17,10 @@ from core.dates import parse_date, month_name_from_records
 from core.excel_utils import safe_set_value, get_writable_cell, cell_value
 from core.countries import collect_included_countries
 
+from openpyxl.styles import Alignment
+from core.text_formatting import process_multiline_branding, markdown_to_richtext
+from config.fields import AT_FIELDS
+
 from services.planner_service import (
     WeekBlock,
     hub_role,
@@ -103,12 +107,11 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
     # Esto sobrevive a cualquier cambio futuro en la plantilla de DC
     branding_layout_dict = None
     if block.tc_row:
+        # Mapeo exacto relativo a tc_row
         branding_layout_dict = {
-            "branding_rows": {
-                "watermark": block.tc_row + 1,
-                "bug": [block.tc_row + 2, block.tc_row + 3],
-                "endcard": [block.tc_row + 4, block.tc_row + 5]
-            }
+            "watermark": block.tc_row + 1,        # 1 fila total
+            "bug": [block.tc_row + 2, block.tc_row + 3],  # 2 filas independientes
+            "endcard": [block.tc_row + 4, block.tc_row + 5]  # 2 filas independientes
         }
     # -----------------------------------
 
@@ -391,36 +394,31 @@ from core.text_formatting import process_multiline_branding
 from core.excel_utils import safe_set_value, center_wrap
 from config.fields import AT_FIELDS
 
-def write_dc_branding(ws, layout, col, record):
+def write_dc_branding(ws, branding_layout, col, record):
     """
-    Inyecta la sección de BRANDING para Disney Channel.
-    No incluye Copyright y compacta el Watermark.
+    Inyecta la sección BRANDING en DC basada en posicionamiento relativo.
     """
-    branding_layout = layout.get("branding_rows")
-    if not branding_layout:
-        return
-        
     f = record.get("fields", record)
-    
-    # 1. WATERMARK (1 Fila, texto completo con saltos internos)
-    watermark_text = f.get(AT_FIELDS["branding_watermark"], "")
-    safe_set_value(
-        ws, 
-        branding_layout["watermark"], 
-        col, 
-        str(watermark_text).strip() if watermark_text else "", 
-        alignment=center_wrap()
-    )
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    # 2. BUG (2 Filas separadas)
+    def _set_rich_cell(row, column, text_val, alignment):
+        cell = ws.cell(row=row, column=column)
+        cell.value = markdown_to_richtext(text_val)
+        cell.alignment = alignment
+
+    # 1. WATERMARK: 1 fila con todo el bloque de texto (\n interno y Markdown)
+    watermark_text = f.get(AT_FIELDS["branding_watermark"], "")
+    _set_rich_cell(branding_layout["watermark"], col, watermark_text, align_center)
+
+    # 2. BUG: 2 filas independientes
     bug_lines = process_multiline_branding(f.get(AT_FIELDS["branding_bug"]), max_lines=2)
     for idx, row in enumerate(branding_layout["bug"]):
-        safe_set_value(ws, row, col, bug_lines[idx], alignment=center_wrap())
+        _set_rich_cell(row, col, bug_lines[idx], align_center)
 
-    # 3. ENDCARD (2 Filas separadas)
+    # 3. ENDCARD: 2 filas independientes
     endcard_lines = process_multiline_branding(f.get(AT_FIELDS["branding_endcard"]), max_lines=2)
     for idx, row in enumerate(branding_layout["endcard"]):
-        safe_set_value(ws, row, col, endcard_lines[idx], alignment=center_wrap())
+        _set_rich_cell(row, col, endcard_lines[idx], align_center)
 
 def update_full_calendar_month_title(ws, records: List[Dict]):
     """

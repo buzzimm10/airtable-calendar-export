@@ -133,41 +133,40 @@ def write_djr_week_number(ws, layout, week_monday):
 
 def write_djr_branding(ws, layout, col, record):
     """
-    Inyecta la sección de BRANDING para Disney Junior respetando
-    las filas asignadas y los saltos de línea.
+    Inyecta la sección BRANDING en DJR respetando las reglas de filas y Markdown.
     """
     branding_layout = layout.get("branding_rows")
     if not branding_layout:
         return
         
     f = record.get("fields", record)
-    
-    # 1. WATERMARK (4 Filas separadas)
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+    # Helper interno para escribir aplicando RichText de forma segura
+    def _set_rich_cell(row, column, text_val, alignment):
+        cell = ws.cell(row=row, column=column)
+        cell.value = markdown_to_richtext(text_val)
+        cell.alignment = alignment
+
+    # 1. WATERMARK: 4 filas independientes
     watermark_lines = process_multiline_branding(f.get(AT_FIELDS["branding_watermark"]), max_lines=4)
     for idx, row in enumerate(branding_layout["watermark"]):
-        safe_set_value(ws, row, col, watermark_lines[idx], alignment=center_wrap())
+        _set_rich_cell(row, col, watermark_lines[idx], align_center)
 
-    # 2. BUG (3 Filas separadas)
+    # 2. BUG: 3 filas independientes
     bug_lines = process_multiline_branding(f.get(AT_FIELDS["branding_bug"]), max_lines=3)
     for idx, row in enumerate(branding_layout["bug"]):
-        safe_set_value(ws, row, col, bug_lines[idx], alignment=center_wrap())
+        _set_rich_cell(row, col, bug_lines[idx], align_center)
 
-    # 3. COPYRIGHT (1 Fila, alineado a la izquierda, con negritas parciales)
+    # 3. COPYRIGHT: 1 sola fila con todo el bloque de texto (\n interno)
     copyright_text = f.get(AT_FIELDS["branding_copyright"], "")
-    if copyright_text:
-        copy_row = branding_layout["copyright"]
-        cell = ws.cell(row=copy_row, column=col)
-        
-        # Aplicamos la magia del RichText
-        cell.value = markdown_to_richtext(copyright_text)
-        
-        # Alineación: Izquierda (left) y centrado verticalmente
-        cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    _set_rich_cell(branding_layout["copyright"], col, copyright_text, align_left)
 
-    # 4. ENDCARD (6 Filas separadas)
+    # 4. ENDCARD: 6 filas independientes
     endcard_lines = process_multiline_branding(f.get(AT_FIELDS["branding_endcard"]), max_lines=6)
     for idx, row in enumerate(branding_layout["endcard"]):
-        safe_set_value(ws, row, col, endcard_lines[idx], alignment=center_wrap())
+        _set_rich_cell(row, col, endcard_lines[idx], align_center)
 
 def write_djr_asset_to_col(ws, layout, col, record):
     single = assemble_text_for_single_asset(record)

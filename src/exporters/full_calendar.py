@@ -103,6 +103,79 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
         )
 
     # --- LÓGICA DINÁMICA DE BRANDING ---
+    branding_layout_dict = None
+    if block.tc_row:
+        branding_layout_dict = {
+            "branding_rows": {
+                "watermark": block.tc_row + 1,
+                "bug": [block.tc_row + 2, block.tc_row + 3],
+                "endcard": [block.tc_row + 4, block.tc_row + 5]
+            }
+        }
+
+    if role == "Programming":
+        # máximo 2 contenidos, uno por columna
+        for idx, record in enumerate(records[:2]):
+            col = role_cols[idx]
+            single = assemble_text_for_single_asset(record)
+
+            _write(block.content_type_row, col, single["content_type"])
+            _write(block.property_row, col, single["property"])
+            _write(block.title_row, col, single["title"])
+            _write(block.synopsis_row, col, single["synopsis"])
+            _write(block.strategy_row, col, single["strategy"])
+            _write(block.tx_row, col, single["tx"])
+            _write(block.tc_row, col, single["tc"])
+            
+            # --- AQUÍ APLICAMOS LA MAGIA AL COMENTARIO ---
+            _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
+
+            # Inyector de Branding DC
+            if branding_layout_dict:
+                write_dc_branding(ws, branding_layout_dict, col, record)
+
+    elif role == "Mediaplanning":
+        # primer contenido en columna Mediaplanning
+        # segundo contenido, si existe, en columna UK
+        target_cols = []
+        if role_cols:
+            target_cols.append(role_cols[0])
+        if uk_cols:
+            target_cols.append(uk_cols[0])
+
+        for idx, record in enumerate(records[:2]):
+            if idx >= len(target_cols):
+                break
+
+            col = target_cols[idx]
+            single = assemble_text_for_single_asset(record)
+
+            _write(block.content_type_row, col, single["content_type"])
+            _write(block.property_row, col, single["property"])
+            _write(block.title_row, col, single["title"])
+            _write(block.synopsis_row, col, single["synopsis"])
+            _write(block.strategy_row, col, single["strategy"])
+            _write(block.tx_row, col, single["tx"])
+            _write(block.tc_row, col, single["tc"])
+            
+            # --- AQUÍ APLICAMOS LA MAGIA AL COMENTARIO ---
+            _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
+
+            # Inyector de Branding DC
+            if branding_layout_dict:
+                write_dc_branding(ws, branding_layout_dict, col, record)
+
+            # si el segundo contenido va en UK, cambiar cabecera OWNER a MEDIAPLANNING HUB
+            if idx == 1 and block.owner_row and col in uk_cols:
+                safe_set_value(
+                    ws,
+                    block.owner_row,
+                    col,
+                    "MEDIAPLANNING HUB",
+                    alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
+                )
+
+    # --- LÓGICA DINÁMICA DE BRANDING ---
     # Calculamos las filas de branding dinámicamente relativas a tc_row
     # Esto sobrevive a cualquier cambio futuro en la plantilla de DC
     branding_layout_dict = None

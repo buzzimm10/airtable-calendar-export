@@ -101,10 +101,10 @@ def cleanup_stale_merged_cells(ws, row_start: int = 1, row_end: Optional[int] = 
     Replace stale MergedCell objects that are no longer covered by an active merged range
     with normal writable Cell objects.
     """
-    if row_end is None:
-        row_end = ws.max_row
-    if col_end is None:
-        col_end = ws.max_column
+    # Fix para el linter: Aseguramos que siempre sean números enteros (int) usando 'or 1' 
+    # por si openpyxl devuelve None en una hoja completamente vacía.
+    actual_row_end = row_end if row_end is not None else int(ws.max_row or 1)
+    actual_col_end = col_end if col_end is not None else int(ws.max_column or 1)
 
     active_ranges = list(ws.merged_cells.ranges)
 
@@ -116,8 +116,9 @@ def cleanup_stale_merged_cells(ws, row_start: int = 1, row_end: Optional[int] = 
 
     replaced = 0
 
-    for row in range(row_start, row_end + 1):
-        for col in range(col_start, col_end + 1):
+    # Usamos actual_row_end y actual_col_end para que VS Code sepa que es 100% seguro hacer el +1
+    for row in range(row_start, actual_row_end + 1):
+        for col in range(col_start, actual_col_end + 1):
             key = (row, col)
             cell_obj = ws._cells.get(key)
 
@@ -130,9 +131,8 @@ def cleanup_stale_merged_cells(ws, row_start: int = 1, row_end: Optional[int] = 
             "cleanup_stale_merged_cells: replaced %s stale merged cells in range %s:%s to %s:%s",
             replaced,
             get_column_letter(col_start), row_start,
-            get_column_letter(col_end), row_end,
+            get_column_letter(actual_col_end), actual_row_end,
         )
-
 
 def safe_set_value(ws, row: int, col: int, value, alignment=None, number_format=None, font=None, fill=None):
     cell = ensure_writable_cell(ws, row, col)

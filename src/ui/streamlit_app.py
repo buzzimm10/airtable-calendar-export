@@ -5,18 +5,24 @@ from collections import Counter
 import pandas as pd
 import streamlit as st
 
-# Allow imports from src/
+# 🚨 1. PRIMERO le enseñamos a Python dónde buscar 🚨
 CURRENT_DIR = os.path.dirname(__file__)
 SRC_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
+# 🚨 2. LUEGO importamos nuestras carpetas locales 🚨
+from config.countries import SHEET_COUNTRIES as dc_countries
+from config.countries_djr import DJR_SHEET_COUNTRIES as djr_countries
 from services.planner_service import load_and_filter_records, hub_role
 from services.qa_service import run_qa_on_records
 from config.fields import AT_FIELDS
-from config.styles import OVERVIEW_FILL_COLORS # <-- NUEVO
-from config.content_types import MONTHLY_OVERVIEW_MAPPING # <-- NUEVO
+from config.styles import OVERVIEW_FILL_COLORS
+from config.content_types import MONTHLY_OVERVIEW_MAPPING
 from populate_calendar import populate_calendar
+
+# --- PAGE CONFIG ---
+# ... tu código sigue normal a partir de aquí ...
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -90,10 +96,22 @@ with st.sidebar:
         use_json = st.checkbox("Use local JSON", value=False)
         json_path = st.text_input("JSON path", value="data/sample_airtable.json") if use_json else None
         
-        # El text_input ahora se alimenta de la ruta dinámica
         template_path = st.text_input("Template path", value=default_template_path)
         output_folder = st.text_input("Output folder", value="output")
 
+    st.divider()
+
+    # ---> NUEVO: Selector visual de Países Fase 2 <---
+    st.markdown("### 🌍 Calendarios Locales (Fase 2)")
+    country_options = dc_countries if channel == "Disney Channel" else djr_countries
+    country_options = [c for c in country_options if c.lower() not in ["spain", "españa"]]
+    
+    selected_countries = st.multiselect(
+        "Selecciona para qué países generar calendarios limpios individuales:",
+        options=country_options,
+        default=country_options,
+        help="Los archivos se guardarán automáticamente en la carpeta 'country_calendars'."
+    )
     st.divider()
     
     if st.button("📡 Fetch Data", type="primary", use_container_width=True):
@@ -319,7 +337,8 @@ else:
                             output_path=output_path,
                             channel=channel,
                             enable_mediaplanning=include_mediaplanning,
-                            channel_id_to_name_map=st.session_state.channel_map
+                            channel_id_to_name_map=st.session_state.channel_map,
+                            selected_countries=selected_countries # <-- NUEVO: Pasamos la selección a tu backend
                         )
                         st.session_state.export_success = True
                         st.session_state.output_path = output_path

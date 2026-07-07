@@ -337,7 +337,7 @@ else:
         btn_col1, btn_col2, _ = st.columns([1, 1, 2])
         
         with btn_col1:
-            # INTERCEPTOR CRÍTICO: Si num_blockers > 0, el botón se deshabilita automáticamente
+            # INTERCEPTOR CRÍTICO: Si num_blockers > 0, el botón se deshabilita
             button_disabled = num_blockers > 0
             
             if button_disabled:
@@ -347,30 +347,51 @@ else:
                 with st.spinner("Escribiendo Excel... No cierres esta ventana."):
                     try:
                         os.makedirs(output_folder, exist_ok=True)
-                        populate_calendar(
+                        # Recuperamos la ruta del ZIP generado
+                        zip_output = populate_calendar(
                             records=records,
                             template_path=template_path,
                             output_path=output_path,
                             channel=channel,
                             enable_mediaplanning=include_mediaplanning,
                             channel_id_to_name_map=st.session_state.channel_map,
-                            selected_countries=selected_countries # <-- NUEVO: Pasamos la selección a tu backend
+                            selected_countries=selected_countries 
                         )
                         st.session_state.export_success = True
                         st.session_state.output_path = output_path
                         st.session_state.output_filename = output_filename
+                        st.session_state.zip_path = zip_output 
                     except Exception as e:
                         st.error(f"Error generando Excel: {str(e)}")
         
         if st.session_state.get("export_success", False):
             with btn_col2:
-                with open(st.session_state.output_path, "rb") as file:
-                    st.download_button(
-                        label="⬇️ Descargar Archivo",
-                        data=file,
-                        file_name=st.session_state.output_filename,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="secondary",
-                        use_container_width=True
-                    )
-            st.success("✅ ¡Reporte listo! Haz clic en Descargar Archivo.")
+                # Recuperamos los valores y aseguramos que son strings para calmar a Pylance
+                master_path = st.session_state.get("output_path")
+                master_filename = st.session_state.get("output_filename")
+                zip_path = st.session_state.get("zip_path")
+                
+                # 1. Botón Master (Solo se muestra si la ruta es un string válido)
+                if master_path and isinstance(master_path, str) and master_filename and isinstance(master_filename, str):
+                    with open(master_path, "rb") as file:
+                        st.download_button(
+                            label="⬇️ Descargar Master Calendar",
+                            data=file,
+                            file_name=master_filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            type="secondary",
+                            use_container_width=True
+                        )
+                
+                # 2. Botón ZIP de Países Locales (Solo se muestra si la ruta es un string válido)
+                if zip_path and isinstance(zip_path, str):
+                    with open(zip_path, "rb") as zfile:
+                        st.download_button(
+                            label="📦 Descargar Calendarios Locales (ZIP)",
+                            data=zfile,
+                            file_name=os.path.basename(zip_path),
+                            mime="application/zip",
+                            type="primary",
+                            use_container_width=True
+                        )
+            st.success("✅ ¡Reporte listo! Selecciona tu descarga arriba.")

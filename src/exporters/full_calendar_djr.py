@@ -20,6 +20,8 @@ from config.countries_djr import DJR_SHEET_COUNTRIES, DJR_REGION_PRESETS
 from core.dates import (
     parse_date,
     monday_of_week,
+    month_name_from_records,
+    resolve_target_month_year,
     first_visible_monday_of_target_month,
     resolve_target_month_year,
 )
@@ -492,6 +494,13 @@ def populate_calendar_djr(
 
     cleanup_stale_merged_cells(ws)
     wb.template = False
+    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS <---
+    month_name_upper = month_name_from_records(records).capitalize()
+    for sn in wb.sheetnames:
+        if "highlights" in sn.lower():
+            wb[sn].title = f"YT DC EMEA {month_name_upper} Highlights"
+
+    cleanup_stale_merged_cells(ws) 
     wb.save(output_path)
 
     logging.info(f"Saved DJR calendar to: {output_path}")

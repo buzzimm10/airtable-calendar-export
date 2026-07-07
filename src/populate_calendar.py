@@ -52,6 +52,8 @@ from core.dates import (
     resolve_target_month_year,
     first_visible_monday_of_target_month,
     full_calendar_anchor_dates_from_records,
+    month_name_from_records,
+    resolve_target_month_year,
 )
 from core.filters import (
     filter_records_by_brand,
@@ -84,17 +86,19 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             channel_id_to_name_map=channel_id_to_name_map
         )
         
-        # ---> FASE 2: CALENDARIOS LOCALES <---
+        # ---> FASE 2: CALENDARIOS LOCALES (DJR) <---
+        zip_path = None
         if selected_countries != []:
-            logging.info("Iniciando Fase 2: Generación de Calendarios Locales...")
-            generate_local_calendars(
+            target_year, target_month = resolve_target_month_year(records)
+            m_str = f"{target_year}-{target_month:02d}" if target_year else "2026-05"
+            zip_path = generate_local_calendars(
                 master_path=output_path, 
                 output_dir="country_calendars", 
-                channel_type="DJR", # o "DC"
-                selected_countries=selected_countries
+                channel_type="DJR",
+                selected_countries=selected_countries,
+                month_str=m_str
             )
-        
-        return  # Terminamos aquí para no ejecutar la lógica de DC
+        return zip_path  # Retornamos el zip para Streamlit
     # -------------------------------------------------------
 
     # === LÓGICA DE EXPORTACIÓN PARA DISNEY CHANNEL ===
@@ -177,18 +181,31 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
     elif output_path.lower().endswith(".xltx"):
         wb.template = True
     cleanup_stale_merged_cells(ws) 
+    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS <---
+    month_name_upper = month_name_from_records(records).capitalize()
+    for sn in wb.sheetnames:
+        if "highlights" in sn.lower():
+            wb[sn].title = f"YT DC EMEA {month_name_upper} Highlights"
+
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)
     
     # ---> FASE 2: CALENDARIOS LOCALES (DC) <---
-    logging.info("Iniciando Fase 2: Generación de Calendarios Locales para Disney Channel...")
-    generate_local_calendars(
-        master_path=output_path, 
-        output_dir="country_calendars", 
-        channel_type="DC"
-    )
+    zip_path = None
+    if selected_countries != []:
+        target_year, target_month = resolve_target_month_year(records)
+        m_str = f"{target_year}-{target_month:02d}" if target_year else "2026-05"
+        zip_path = generate_local_calendars(
+            master_path=output_path, 
+            output_dir="country_calendars", 
+            channel_type="DC",
+            selected_countries=selected_countries,
+            month_str=m_str,
+            dc_blocks=blocks  # Le pasamos el mapeo dinámico exacto
+        )
     
     logging.info("Done.")
+    return zip_path
 
 def main():
     parser = argparse.ArgumentParser(description="Populate Disney Channel EMEA YouTube calendar into existing template.")

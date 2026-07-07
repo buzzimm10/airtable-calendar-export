@@ -84,14 +84,15 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             channel_id_to_name_map=channel_id_to_name_map
         )
         
-        # ---> FASE 2: CALENDARIOS LOCALES (DJR) <---
-        logging.info("Iniciando Fase 2: Generación de Calendarios Locales para Disney Junior...")
-        generate_local_calendars(
-            master_path=output_path, 
-            output_dir="country_calendars", 
-            channel_type="DJR", # o "DC"
-            selected_countries=selected_countries # <-- NUEVO
-        )
+        # ---> FASE 2: CALENDARIOS LOCALES <---
+        if selected_countries != []:
+            logging.info("Iniciando Fase 2: Generación de Calendarios Locales...")
+            generate_local_calendars(
+                master_path=output_path, 
+                output_dir="country_calendars", 
+                channel_type="DJR", # o "DC"
+                selected_countries=selected_countries
+            )
         
         return  # Terminamos aquí para no ejecutar la lógica de DC
     # -------------------------------------------------------

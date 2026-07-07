@@ -101,17 +101,33 @@ with st.sidebar:
 
     st.divider()
 
-    # ---> NUEVO: Selector visual de Países Fase 2 <---
+    st.divider()
+
+    # ---> MEJORADO: Checkbox condicional y optimizado para la Fase 2 <---
     st.markdown("### 🌍 Calendarios Locales (Fase 2)")
-    country_options = dc_countries if channel == "Disney Channel" else djr_countries
-    country_options = [c for c in country_options if c.lower() not in ["spain", "españa"]]
-    
-    selected_countries = st.multiselect(
-        "Selecciona para qué países generar calendarios limpios individuales:",
-        options=country_options,
-        default=country_options,
-        help="Los archivos se guardarán automáticamente en la carpeta 'country_calendars'."
+    export_individual = st.checkbox(
+        "📦 Exportar calendarios individuales por país", 
+        value=False, 
+        help="Activa esta opción si necesitas generar los archivos limpios e independientes por cada mercado."
     )
+
+    selected_countries = None
+    if export_individual:
+        # Si el checkbox está activo, cargamos y mostramos la lista de selección
+        country_options = dc_countries if channel == "Disney Channel" else djr_countries
+        country_options = [c for c in country_options if c.lower() not in ["spain", "españa"]]
+        
+        selected_countries = st.multiselect(
+            "Selecciona para qué países generar calendarios:",
+            options=country_options,
+            default=country_options,
+            help="Los archivos se guardarán automáticamente en la carpeta 'country_calendars'."
+        )
+    else:
+        # Si el checkbox está apagado, pasamos una lista vacía para indicarle 
+        # al backend que no debe procesar ningún calendario de país.
+        selected_countries = []
+        
     st.divider()
     
     if st.button("📡 Fetch Data", type="primary", use_container_width=True):

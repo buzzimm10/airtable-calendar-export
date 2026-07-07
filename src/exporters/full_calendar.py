@@ -102,17 +102,17 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
         )
 
-    # --- LÓGICA DINÁMICA DE BRANDING ---
+    # --- LÓGICA DINÁMICA DE BRANDING (CORREGIDA) ---
     branding_layout_dict = None
     if block.tc_row:
+        # Quitamos la clave "branding_rows" para que "watermark", "bug", etc. 
+        # queden expuestas directamente en el primer nivel del diccionario.
         branding_layout_dict = {
-            "branding_rows": {
-                "watermark": block.tc_row + 1,
-                "bug": [block.tc_row + 2, block.tc_row + 3],
-                "endcard": [block.tc_row + 4, block.tc_row + 5]
-            }
+            "watermark": block.tc_row + 1,
+            "bug": [block.tc_row + 2, block.tc_row + 3],
+            "endcard": [block.tc_row + 4, block.tc_row + 5]
         }
-
+        
     if role == "Programming":
         # máximo 2 contenidos, uno por columna
         for idx, record in enumerate(records[:2]):

@@ -70,7 +70,8 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
                       week_anchor_cells: Optional[List[str]] = None,
                       enable_mediaplanning: bool = True,
                       anchor_dates_override: Optional[List[str]] = None,
-                      channel_id_to_name_map: Optional[Dict[str, str]] = None):
+                      channel_id_to_name_map: Optional[Dict[str, str]] = None,
+                      selected_countries: Optional[List[str]] = None): # <-- NUEVO
 
     # --- ROUTER: Delegar Disney Junior a su propio Exporter ---
     if channel == "Disney Junior":
@@ -88,7 +89,8 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
         generate_local_calendars(
             master_path=output_path, 
             output_dir="country_calendars", 
-            channel_type="DJR"
+            channel_type="DJR", # o "DC"
+            selected_countries=selected_countries # <-- NUEVO
         )
         
         return  # Terminamos aquí para no ejecutar la lógica de DC
@@ -200,6 +202,7 @@ def main():
     parser.add_argument("--anchors", nargs="*", help="Override weekly anchor cells, e.g., D6 D59 D112 D165 D218.")
     parser.add_argument("--anchor-dates", nargs="*", help="Optional ISO dates for anchors.")
     parser.add_argument("--disable-mediaplanning", action="store_true", help="If set, do not populate Mediaplanning Hub content.")
+    parser.add_argument("--countries", nargs="*", help="Lista específica de países a exportar para los calendarios locales.")
     parser.add_argument("--channel", default="Disney Channel", help='Filter by Brand, e.g. "Disney Channel", "Disney Junior".')
     parser.add_argument("--month", help='Filter by "Month" (optional, case-insensitive).')
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING, ERROR).")
@@ -293,6 +296,7 @@ def main():
         enable_mediaplanning=enable_mediaplanning,
         anchor_dates_override=args.anchor_dates,
         channel_id_to_name_map=channel_id_to_name_map,
+        selected_countries=args.countries, # <-- NUEVO
     )
 
 if __name__ == "__main__":

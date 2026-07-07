@@ -38,6 +38,7 @@ from exporters.full_calendar import (
     infer_week_number_for_block,
 )
 
+from services.local_calendars_service import generate_local_calendars
 from exporters.monthly_overview import populate_monthly_overview
 from exporters.full_calendar_djr import populate_calendar_djr
 
@@ -81,6 +82,15 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             enable_mediaplanning=enable_mediaplanning,
             channel_id_to_name_map=channel_id_to_name_map
         )
+        
+        # ---> FASE 2: CALENDARIOS LOCALES (DJR) <---
+        logging.info("Iniciando Fase 2: Generación de Calendarios Locales para Disney Junior...")
+        generate_local_calendars(
+            master_path=output_path, 
+            output_dir="country_calendars", 
+            channel_type="DJR"
+        )
+        
         return  # Terminamos aquí para no ejecutar la lógica de DC
     # -------------------------------------------------------
 
@@ -164,7 +174,17 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
     elif output_path.lower().endswith(".xltx"):
         wb.template = True
     cleanup_stale_merged_cells(ws) 
+    cleanup_stale_merged_cells(ws) 
     wb.save(output_path)
+    
+    # ---> FASE 2: CALENDARIOS LOCALES (DC) <---
+    logging.info("Iniciando Fase 2: Generación de Calendarios Locales para Disney Channel...")
+    generate_local_calendars(
+        master_path=output_path, 
+        output_dir="country_calendars", 
+        channel_type="DC"
+    )
+    
     logging.info("Done.")
 
 def main():

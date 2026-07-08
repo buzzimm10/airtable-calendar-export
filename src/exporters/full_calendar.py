@@ -224,13 +224,24 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.comments_row, col, single["comments"])
 
     elif role == "Mediaplanning":
-        # primer contenido en columna Mediaplanning
-        # segundo contenido, si existe, en columna UK
         target_cols = []
         if role_cols:
             target_cols.append(role_cols[0])
         if uk_cols:
             target_cols.append(uk_cols[0])
+
+        num_records = len(records[:2])
+        
+        # SOLO renombrar el 4to slot si hay 2 contenidos de Mediaplanning (necesitamos el espacio)
+        # Si no, se queda intacto como "YT TEAM UK"
+        if num_records > 1 and len(target_cols) == 2 and block.owner_row:
+            safe_set_value(
+                ws,
+                block.owner_row,
+                target_cols[1],
+                "MEDIAPLANNING HUB",
+                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
+            )
 
         for idx, record in enumerate(records[:2]):
             if idx >= len(target_cols):
@@ -247,21 +258,26 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
             
-            # ---> INYECTOR DE BRANDING DC <---
+            _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
+
             if branding_layout_dict:
                 write_dc_branding(ws, branding_layout_dict, col, record)
 
-            _write(block.comments_row, col, single["comments"])
-
-            # si el segundo contenido va en UK, cambiar cabecera OWNER a MEDIAPLANNING HUB
-            if idx == 1 and block.owner_row and col in uk_cols:
-                safe_set_value(
-                    ws,
-                    block.owner_row,
-                    col,
-                    "MEDIAPLANNING HUB",
-                    alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
-                )
+        # Si solo hay 1 contenido de Mediaplanning, hacemos Merge & Center con el slot sobrante
+        if num_records == 1 and len(target_cols) == 2:
+            col_start = target_cols[0]
+            col_end = target_cols[1]
+            rows_to_merge = [block.title_row, block.synopsis_row, block.strategy_row]
+            
+            for r in rows_to_merge:
+                if r:
+                    safe_set_value(ws, r, col_end, None) # Limpiar celda de la derecha
+                    try:
+                        ws.merge_cells(start_row=r, start_column=col_start, end_row=r, end_column=col_end)
+                    except Exception:
+                        pass # Ya estaba combinada
+                    cell = ws.cell(row=r, column=col_start)
+                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
 def write_week_label(ws, block, week_number_value: str):
     """

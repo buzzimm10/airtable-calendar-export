@@ -135,14 +135,23 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
                 write_dc_branding(ws, branding_layout_dict, col, record)
 
     elif role == "Mediaplanning":
-        # primer contenido en columna Mediaplanning
-        # segundo contenido, si existe, en columna UK
         target_cols = []
         if role_cols:
             target_cols.append(role_cols[0])
         if uk_cols:
             target_cols.append(uk_cols[0])
 
+        # NUEVO: Renombrar siempre el 4to slot (UK) a MEDIAPLANNING HUB
+        if len(target_cols) == 2 and block.owner_row:
+            safe_set_value(
+                ws,
+                block.owner_row,
+                target_cols[1],
+                "MEDIAPLANNING HUB",
+                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
+            )
+
+        num_records = len(records[:2])
         for idx, record in enumerate(records[:2]):
             if idx >= len(target_cols):
                 break
@@ -158,22 +167,28 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
             
-            # --- AQUÍ APLICAMOS LA MAGIA AL COMENTARIO ---
+            # Aplicamos la magia al comentario
             _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
 
             # Inyector de Branding DC
             if branding_layout_dict:
                 write_dc_branding(ws, branding_layout_dict, col, record)
 
-            # si el segundo contenido va en UK, cambiar cabecera OWNER a MEDIAPLANNING HUB
-            if idx == 1 and block.owner_row and col in uk_cols:
-                safe_set_value(
-                    ws,
-                    block.owner_row,
-                    col,
-                    "MEDIAPLANNING HUB",
-                    alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
-                )
+        # NUEVO: Si solo hay 1 contenido de Mediaplanning, hacemos Merge & Center
+        if num_records == 1 and len(target_cols) == 2:
+            col_start = target_cols[0]
+            col_end = target_cols[1]
+            rows_to_merge = [block.title_row, block.synopsis_row, block.strategy_row]
+            
+            for r in rows_to_merge:
+                if r:
+                    # Limpiamos la celda de la derecha para evitar conflictos
+                    safe_set_value(ws, r, col_end, None)
+                    # Combinamos las celdas horizontalmente
+                    ws.merge_cells(start_row=r, start_column=col_start, end_row=r, end_column=col_end)
+                    # Aseguramos el alineamiento perfecto
+                    cell = ws.cell(row=r, column=col_start)
+                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
     # --- LÓGICA DINÁMICA DE BRANDING ---
     # Calculamos las filas de branding dinámicamente relativas a tc_row

@@ -170,10 +170,10 @@ def apply_overview_fill(cell, content_type: str):
 def write_overview_cell(ws, row: int, col: int, line1: str, line2: str, content_type: str, geofenced: bool):
     cell = get_writable_cell(ws, row, col)
 
-    # Añadimos corchetes al line2 (Tiers) para que resalte textualmente ya que no podemos usar colores parciales
-    formatted_line2 = f"[{line2}]" if line2 else ""
+    # Añadimos el line2 (Tiers) limpio, sin corchetes
+    formatted_line2 = f"{line2}" if line2 else ""
     new_text = line1 if not formatted_line2 else f"{line1}\n{formatted_line2}"
-
+    
     existing = normalize_str(cell.value)
     if existing:
         cell.value = f"{existing}\n\n— — —\n\n{new_text}"

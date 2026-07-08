@@ -4,6 +4,7 @@ import zipfile
 from typing import List, Optional
 from openpyxl import load_workbook
 from datetime import datetime
+from openpyxl.cell.cell import MergedCell # <-- NUEVA IMPORTACIÓN VITAL
 
 from config.layouts import TARGET_SHEET as dc_sheet_name
 from config.countries import SHEET_COUNTRIES as dc_master_countries
@@ -41,7 +42,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
 
-    # --- DEFINICIÓN DE ESTILOS UNIFICADOS (DC Y DJR) ---
+    # --- DEFINICIÓN DE ESTILOS UNIFICADOS ---
     fill_grey = PatternFill(fill_type="solid", fgColor="D0CECE")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
@@ -51,13 +52,21 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if not row_idx: return
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 20  # Más compacto
-        for c in range(2, 34): # Columna B hasta la AG
+        sheet.row_dimensions[row_idx].height = 20  
+        for c in range(2, 34): 
             cell = sheet.cell(row=row_idx, column=c)
             cell.fill = fill_color
             if c == 2:
                 cell.font = font_bold
                 cell.alignment = align_right
+
+    # --- Helper Anti-Crash para celdas combinadas ---
+    def clear_cell(sheet, row_idx, col_idx):
+        if row_idx and col_idx:
+            cell_obj = sheet.cell(row=row_idx, column=col_idx)
+            # Solo la limpiamos si es una celda real, esquivando los MergedCells
+            if not isinstance(cell_obj, MergedCell):
+                cell_obj.value = None
 
     for country in countries_to_process:
         if country.lower() in ["spain", "españa"]: continue
@@ -86,12 +95,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         if "YES" not in cell_val:
                             rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"], layout["tx_row"], layout["tc_row"]]
                             rows_to_clear.extend(layout["comments_rows"].values())
-                            for r in rows_to_clear: 
-                                if r: ws.cell(row=r, column=col).value = None
+                            for r in rows_to_clear: clear_cell(ws, r, col)
                         
                         elif not is_israel:
-                            if layout.get("tx_row"): ws.cell(row=layout["tx_row"], column=col).value = None
-                            if layout.get("tc_row"): ws.cell(row=layout["tc_row"], column=col).value = None
+                            clear_cell(ws, layout.get("tx_row"), col)
+                            clear_cell(ws, layout.get("tc_row"), col)
 
                 if not is_israel:
                     style_recycled_row(ws, layout.get("tx_row"), "USED OR NOT", fill_grey)
@@ -109,11 +117,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
                         if "YES" not in cell_val:
                             rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row, block.tx_row, block.tc_row, block.comments_row]
-                            for r in rows_to_clear: 
-                                if r: ws.cell(row=r, column=col).value = None
+                            for r in rows_to_clear: clear_cell(ws, r, col)
                         elif not is_israel:
-                            if block.tx_row: ws.cell(row=block.tx_row, column=col).value = None
-                            if block.tc_row: ws.cell(row=block.tc_row, column=col).value = None
+                            clear_cell(ws, block.tx_row, col)
+                            clear_cell(ws, block.tc_row, col)
 
                 if not is_israel:
                     style_recycled_row(ws, block.tx_row, "USED OR NOT", fill_grey)
@@ -129,14 +136,13 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             # 1. Hiding Branding & Comments
             if val_b in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]:
                 ws.row_dimensions[r].hidden = True
-                # Aseguramos ocultar también las filas vacías contiguas (Bug ocupa 3 filas, etc)
                 for offset in range(1, 4):
                     if r + offset <= ws.max_row and str(ws.cell(row=r+offset, column=2).value).strip() == "":
                         ws.row_dimensions[r+offset].hidden = True
                     else:
                         break
             
-            # 2. Hiding Contadores de Países al final del Excel & Filas de Tiers (Rollout)
+            # 2. Hiding Contadores de Países al final del Excel & Filas de Tiers
             if val_b == "total" or val_c == "total" or val_b in country_names_lower:
                 ws.row_dimensions[r].hidden = True
 

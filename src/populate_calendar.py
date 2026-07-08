@@ -59,7 +59,7 @@ from core.filters import (
     filter_records_by_brand,
     filter_records_by_month,
 )
-from core.excel_utils import cleanup_stale_merged_cells, get_anchor_dates_from_values_wb
+from core.excel_utils import cleanup_stale_merged_cells, get_anchor_dates_from_values_wb, safe_set_value
 from core.airtable_client import (
     fetch_airtable_records,
     load_local_json,
@@ -181,11 +181,20 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
     elif output_path.lower().endswith(".xltx"):
         wb.template = True
     cleanup_stale_merged_cells(ws) 
-    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS <---
+    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
+    from datetime import date
     month_name_upper = month_name_from_records(records).capitalize()
+    
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
-            wb[sn].title = f"YT DC EMEA {month_name_upper} Highlights"
+            # 1. Cambiar nombre de la pestaña
+            new_title = f"YT DC EMEA {month_name_upper} Highlights"
+            wb[sn].title = new_title
+            
+            # 2. Inyectar la fecha en E4 de forma segura
+            if target_year and target_month:
+                ws_high = wb[new_title]
+                safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="mmm-yy")
 
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)

@@ -17,14 +17,8 @@ from config.layouts_djr import (
     DJR_WEEK_LAYOUT,
 )
 from config.countries_djr import DJR_SHEET_COUNTRIES, DJR_REGION_PRESETS
-from core.dates import (
-    parse_date,
-    monday_of_week,
-    month_name_from_records,
-    resolve_target_month_year,
-    first_visible_monday_of_target_month,
-    resolve_target_month_year,
-)
+from core.dates import month_name_from_records, resolve_target_month_year, first_visible_monday_of_target_month
+
 from core.text_formatting import normalize_str, lower_clean
 from core.excel_utils import safe_set_value, center_wrap, cleanup_stale_merged_cells, get_writable_cell
 from core.countries import collect_included_countries
@@ -494,11 +488,22 @@ def populate_calendar_djr(
 
     cleanup_stale_merged_cells(ws)
     wb.template = False
-    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS <---
+    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
+    from datetime import date
+    
     month_name_upper = month_name_from_records(records).capitalize()
+    target_year, target_month = resolve_target_month_year(records)
+
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
-            wb[sn].title = f"YT DC EMEA {month_name_upper} Highlights"
+            # 1. Cambiar nombre de la pestaña
+            new_title = f"YT DJR EMEA {month_name_upper} Highlights"
+            wb[sn].title = new_title
+            
+            # 2. Inyectar la fecha en E4 de forma segura
+            if target_year and target_month:
+                ws_high = wb[new_title]
+                safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="mmm-yy")
 
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)

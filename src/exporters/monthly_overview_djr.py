@@ -18,7 +18,7 @@ from core.text_formatting import normalize_str, lower_clean
 from core.excel_utils import get_writable_cell, center_wrap
 from core.countries import normalize_overview_region
 from services.planner_service import hub_role, asset_is_event
-
+from typing import Dict, List, Optional, Tuple
 
 DJR_OVERVIEW_DAY_COLS = {
     "Monday": 4,
@@ -101,12 +101,14 @@ def get_episode_number(record):
     return ""
 
 
-def build_djr_overview_text(record):
+def build_djr_overview_text(record, target_country=None):
     content_type = normalize_str(record.get(AT_FIELDS["content_type"]))
     prop = clean_property(record.get(AT_FIELDS["property"]))
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
-    region = get_djr_overview_region_text(record)
+    
+    # MAGIA: Si es un calendario local, NO incluimos el texto de región/Tiers
+    region = "" if target_country else get_djr_overview_region_text(record)
     geofenced = lower_clean(record.get(AT_FIELDS["geofenced"])) == "yes"
 
     ep = get_episode_number(record)
@@ -139,11 +141,9 @@ def build_djr_overview_text(record):
         return f"{prop} Podcast\n{region}".strip()
 
     if content_type == "Vertical Short":
-        # handled separately in two rows, so only return property here
         return prop
 
     return f"{prop}\n{region}".strip()
-
 
 def get_djr_overview_bucket(content_type):
     if content_type == "Full Episode":
@@ -182,17 +182,16 @@ def write_djr_overview_regular_cell(ws, row, col, text, bucket):
         cell.fill = PatternFill(fill_type="solid", fgColor=fill_color)
 
 
-def write_djr_overview_vertical(ws, layout, col, record):
+def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_row, bottom_row = layout["vertical_rows"]
 
     top_cell = get_writable_cell(ws, top_row, col)
     bottom_cell = get_writable_cell(ws, bottom_row, col)
 
-    top_text = build_djr_overview_text(record)
+    top_text = build_djr_overview_text(record, target_country=target_country)
     bottom_text = get_djr_overview_region_text(record)
 
     append_to_cell(top_cell, top_text)
-    bottom_cell.value = bottom_text
 
     fill = PatternFill(fill_type="solid", fgColor=DJR_OVERVIEW_FILL_COLORS["vertical"])
 
@@ -200,10 +199,16 @@ def write_djr_overview_vertical(ws, layout, col, record):
     bottom_cell.fill = fill
 
     top_cell.font = Font(bold=True, color="FF000000")
-    bottom_cell.font = Font(bold=True, color="FFFF0000")
-
     top_cell.alignment = center_wrap()
-    bottom_cell.alignment = center_wrap()
+    
+    # MAGIA: Si NO es un país local, escribimos la fila roja/amarilla de Tiers
+    if not target_country:
+        bottom_cell.value = bottom_text
+        bottom_cell.alignment = center_wrap()
+        if bottom_text == "SPAIN ONLY":
+            bottom_cell.font = Font(bold=True, color="FFFFFF00")
+        else:
+            bottom_cell.font = Font(bold=True, color="FFFF0000")
 
 
 def write_djr_overview_header(ws, records):
@@ -250,6 +255,7 @@ def populate_monthly_overview_djr(
     records,
     enable_mediaplanning=True,
     channel_id_to_name_map=None,
+    target_country=None # <-- NUEVO PARÁMETRO
 ):
     if DJR_MONTHLY_OVERVIEW_SHEET not in wb.sheetnames:
         logging.warning(f"Sheet '{DJR_MONTHLY_OVERVIEW_SHEET}' not found. Skipping DJR monthly overview.")
@@ -257,7 +263,18 @@ def populate_monthly_overview_djr(
 
     ws = wb[DJR_MONTHLY_OVERVIEW_SHEET]
 
-    first_monday = write_djr_overview_header(ws, records)
+    # Limpiar tablero para calendario local
+    if target_country:
+        from openpyxl.styles import PatternFill
+        for week_num, layout in DJR_OVERVIEW_WEEK_LAYOUT.items():
+            for row in list(range(layout["date_row"] + 1, layout.get("vertical_rows", [0])[-1] + 1)):
+                for col in range(4, 11):
+                    c = get_writable_cell(ws, row, col)
+                    c.value = None
+                    c.fill = PatternFill(fill_type=None)
+
+    # Llamamos a TU función de header
+    first_monday = write_djr_overview_header(ws, records) 
     if not first_monday:
         logging.warning("Could not determine first visible Monday for DJR monthly overview.")
         return
@@ -267,6 +284,18 @@ def populate_monthly_overview_djr(
 
         if asset_is_event(fields):
             continue
+            
+        # Filtro estricto para países locales
+        if target_country:
+            from core.countries import collect_included_countries
+            included, _ = collect_included_countries(
+                youtube_channel=fields.get(AT_FIELDS["youtube_channel"]),
+                region=fields.get(AT_FIELDS["region"]),
+                notes=fields.get(AT_FIELDS["notes"]),
+                excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
+                channel_id_to_name_map=channel_id_to_name_map,
+            )
+            if target_country not in included: continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))
         if owner == "Mediaplanning" and not enable_mediaplanning:
@@ -296,7 +325,7 @@ def populate_monthly_overview_djr(
         layout = DJR_OVERVIEW_WEEK_LAYOUT[week_index]
 
         if bucket == "vertical":
-            write_djr_overview_vertical(ws, layout, col, fields)
+            write_djr_overview_vertical(ws, layout, col, fields, target_country=target_country)
             continue
 
         if bucket == "podcast":
@@ -307,7 +336,7 @@ def populate_monthly_overview_djr(
         else:
             row = layout[bucket]
 
-        text = build_djr_overview_text(fields)
+        text = build_djr_overview_text(fields, target_country=target_country)
         write_djr_overview_regular_cell(ws, row, col, text, bucket)
 
     auto_adjust_djr_overview_heights(ws)

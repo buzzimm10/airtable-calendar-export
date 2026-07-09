@@ -102,11 +102,8 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
         )
 
-    # --- LÓGICA DINÁMICA DE BRANDING (CORREGIDA) ---
     branding_layout_dict = None
     if block.tc_row:
-        # Quitamos la clave "branding_rows" para que "watermark", "bug", etc. 
-        # queden expuestas directamente en el primer nivel del diccionario.
         branding_layout_dict = {
             "watermark": block.tc_row + 1,
             "bug": [block.tc_row + 2, block.tc_row + 3],
@@ -114,7 +111,6 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
         }
         
     if role == "Programming":
-        # máximo 2 contenidos, uno por columna
         for idx, record in enumerate(records[:2]):
             col = role_cols[idx]
             single = assemble_text_for_single_asset(record)
@@ -126,51 +122,36 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.strategy_row, col, single["strategy"])
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
-            
-            # --- AQUÍ APLICAMOS LA MAGIA AL COMENTARIO ---
             _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
 
-            # Inyector de Branding DC
             if branding_layout_dict:
                 write_dc_branding(ws, branding_layout_dict, col, record)
 
     elif role == "Mediaplanning":
         target_cols = []
-        if role_cols:
-            target_cols.append(role_cols[0])
-        if uk_cols:
-            target_cols.append(uk_cols[0])
+        if role_cols: target_cols.append(role_cols[0])
+        if uk_cols: target_cols.append(uk_cols[0])
 
         num_records = len(records[:2])
         
         # SOLO cambiamos el texto de YT TEAM UK a MEDIAPLANNING si hay 2 contenidos
         if num_records > 1 and len(target_cols) == 2 and block.owner_row:
-            safe_set_value(
-                ws,
-                block.owner_row,
-                target_cols[1],
-                "MEDIAPLANNING HUB",
-                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
-            )
+            safe_set_value(ws, block.owner_row, target_cols[1], "MEDIAPLANNING HUB", alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
         for idx, record in enumerate(records[:2]):
-            if idx >= len(target_cols):
-                break
-
+            if idx >= len(target_cols): break
             col = target_cols[idx]
             single = assemble_text_for_single_asset(record)
 
             _write(block.content_type_row, col, single["content_type"])
             _write(block.property_row, col, single["property"])
             
-            # Para el Merge Vertical, concatenamos los textos en la celda superior (Title)
+            # MERGE VERTICAL: Juntamos Title, Synopsis y Strategy hacia abajo
             text_to_merge = single["title"]
             if single["synopsis"]: text_to_merge += f"\n\n{single['synopsis']}"
             if single["strategy"]: text_to_merge += f"\n\n{single['strategy']}"
             
             _write(block.title_row, col, text_to_merge)
-            
-            # Vaciamos Synopsis y Strategy para que el Merge quede limpio
             safe_set_value(ws, block.synopsis_row, col, None)
             safe_set_value(ws, block.strategy_row, col, None)
 
@@ -178,107 +159,17 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.tc_row, col, single["tc"])
             _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
 
-            if branding_layout_dict:
-                write_dc_branding(ws, branding_layout_dict, col, record)
+            if branding_layout_dict: write_dc_branding(ws, branding_layout_dict, col, record)
 
-            # ---> MAGIA: MERGE VERTICAL EN SU PROPIA COLUMNA <---
+            # Efectuamos el Merge Vertical explícito en LA MISMA COLUMNA
             if block.title_row and block.strategy_row:
                 try:
                     ws.merge_cells(start_row=block.title_row, start_column=col, end_row=block.strategy_row, end_column=col)
                 except Exception:
-                    pass # Si ya estaba combinada, lo ignoramos
+                    pass
                 cell = ws.cell(row=block.title_row, column=col)
                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
-    # --- LÓGICA DINÁMICA DE BRANDING ---
-    # Calculamos las filas de branding dinámicamente relativas a tc_row
-    # Esto sobrevive a cualquier cambio futuro en la plantilla de DC
-    branding_layout_dict = None
-    if block.tc_row:
-        # Mapeo exacto relativo a tc_row
-        branding_layout_dict = {
-            "watermark": block.tc_row + 1,        # 1 fila total
-            "bug": [block.tc_row + 2, block.tc_row + 3],  # 2 filas independientes
-            "endcard": [block.tc_row + 4, block.tc_row + 5]  # 2 filas independientes
-        }
-    # -----------------------------------
-
-    if role == "Programming":
-        # máximo 2 contenidos, uno por columna
-        for idx, record in enumerate(records[:2]):
-            col = role_cols[idx]
-            single = assemble_text_for_single_asset(record)
-
-            _write(block.content_type_row, col, single["content_type"])
-            _write(block.property_row, col, single["property"])
-            _write(block.title_row, col, single["title"])
-            _write(block.synopsis_row, col, single["synopsis"])
-            _write(block.strategy_row, col, single["strategy"])
-            _write(block.tx_row, col, single["tx"])
-            _write(block.tc_row, col, single["tc"])
-            
-            # ---> INYECTOR DE BRANDING DC <---
-            if branding_layout_dict:
-                write_dc_branding(ws, branding_layout_dict, col, record)
-
-            _write(block.comments_row, col, single["comments"])
-
-    elif role == "Mediaplanning":
-        target_cols = []
-        if role_cols:
-            target_cols.append(role_cols[0])
-        if uk_cols:
-            target_cols.append(uk_cols[0])
-
-        num_records = len(records[:2])
-        
-        # SOLO renombrar el 4to slot si hay 2 contenidos de Mediaplanning (necesitamos el espacio)
-        # Si no, se queda intacto como "YT TEAM UK"
-        if num_records > 1 and len(target_cols) == 2 and block.owner_row:
-            safe_set_value(
-                ws,
-                block.owner_row,
-                target_cols[1],
-                "MEDIAPLANNING HUB",
-                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
-            )
-
-        for idx, record in enumerate(records[:2]):
-            if idx >= len(target_cols):
-                break
-
-            col = target_cols[idx]
-            single = assemble_text_for_single_asset(record)
-
-            _write(block.content_type_row, col, single["content_type"])
-            _write(block.property_row, col, single["property"])
-            _write(block.title_row, col, single["title"])
-            _write(block.synopsis_row, col, single["synopsis"])
-            _write(block.strategy_row, col, single["strategy"])
-            _write(block.tx_row, col, single["tx"])
-            _write(block.tc_row, col, single["tc"])
-            
-            _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
-
-            if branding_layout_dict:
-                write_dc_branding(ws, branding_layout_dict, col, record)
-
-        # Si solo hay 1 contenido de Mediaplanning, hacemos Merge & Center con el slot sobrante
-        if num_records == 1 and len(target_cols) == 2:
-            col_start = target_cols[0]
-            col_end = target_cols[1]
-            rows_to_merge = [block.title_row, block.synopsis_row, block.strategy_row]
-            
-            for r in rows_to_merge:
-                if r:
-                    safe_set_value(ws, r, col_end, None) # Limpiar celda de la derecha
-                    try:
-                        ws.merge_cells(start_row=r, start_column=col_start, end_row=r, end_column=col_end)
-                    except Exception:
-                        pass # Ya estaba combinada
-                    cell = ws.cell(row=r, column=col_start)
-                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
+                
 def write_week_label(ws, block, week_number_value: str):
     """
     Write 'WEEK <N>' into B row of the anchor line.

@@ -117,11 +117,7 @@ def overview_visual_position(live_date: date, first_monday: date) -> Optional[Tu
     day_name = DAY_ORDER[live_date.weekday()]
     return visual_week, day_name
 
-def build_overview_lines(record: Dict, channel_id_to_name_map: Optional[Dict[str, str]] = None) -> Tuple[str, str, bool]:
-    """
-    Returns:
-    line1, line2, geofenced
-    """
+def build_overview_lines(record: Dict, channel_id_to_name_map: Optional[Dict[str, str]] = None, target_country: Optional[str] = None) -> Tuple[str, str, bool]:
     if channel_id_to_name_map is None:
         channel_id_to_name_map = {}
 
@@ -130,20 +126,13 @@ def build_overview_lines(record: Dict, channel_id_to_name_map: Optional[Dict[str
         activity = normalize_str(record.get(AT_FIELDS["asset_label"])) or normalize_str(record.get(AT_FIELDS["title"]))
 
     content_type = normalize_str(record.get(AT_FIELDS["content_type"]))
-
-    if content_type == "Musical Lift":
-        activity = f"♪ {activity}"
-    elif content_type == "Lift":
-        activity = f"▶ {activity}"
-    elif content_type == "Exclusive":
-        activity = f"★ {activity}"
-    elif content_type == "Compilation":
-        activity = f"COMP {activity}"
-    elif content_type == "Live Stream":
-        activity = f"LIVE {activity}"
+    if content_type == "Musical Lift": activity = f"♪ {activity}"
+    elif content_type == "Lift": activity = f"▶ {activity}"
+    elif content_type == "Exclusive": activity = f"★ {activity}"
+    elif content_type == "Compilation": activity = f"COMP {activity}"
+    elif content_type == "Live Stream": activity = f"LIVE {activity}"
 
     geofenced = lower_clean(record.get(AT_FIELDS["geofenced"])) == "yes"
-
     included_countries, _ = collect_included_countries(
         youtube_channel=record.get(AT_FIELDS["youtube_channel"]),
         region=record.get(AT_FIELDS["region"]),
@@ -155,10 +144,11 @@ def build_overview_lines(record: Dict, channel_id_to_name_map: Optional[Dict[str
     line2 = normalize_overview_region(record.get(AT_FIELDS["region"]))
     except_suffix = format_except_suffix(record.get(AT_FIELDS["region"]), included_countries)
 
-    if line2:
-        line2 = f"{line2}{except_suffix}"
+    # MAGIA: Si es un calendario local, borramos la línea 2 (Tiers)
+    if target_country:
+        line2 = ""
     else:
-        line2 = except_suffix.strip()
+        line2 = f"{line2}{except_suffix}" if line2 else except_suffix.strip()
 
     return activity, line2, geofenced
 
@@ -412,6 +402,7 @@ def populate_monthly_overview(
     records: List[Dict],
     enable_mediaplanning: bool = True,
     channel_id_to_name_map: Optional[Dict[str, str]] = None,
+    target_country: Optional[str] = None
 ):
     """
     Populate 'MONTHLY OVERVIEW YT DC EMEA'.
@@ -419,31 +410,41 @@ def populate_monthly_overview(
     Uses visual calendar positioning based on the first visible Monday,
     not Airtable Week of Month.
     """
-    if channel_id_to_name_map is None:
-        channel_id_to_name_map = {}    
-    
-    if MONTHLY_OVERVIEW_SHEET not in wb.sheetnames:
-        logging.warning(f"Sheet '{MONTHLY_OVERVIEW_SHEET}' not found. Skipping MONTHLY OVERVIEW export.")
-        return
-
+    if channel_id_to_name_map is None: channel_id_to_name_map = {}    
+    if MONTHLY_OVERVIEW_SHEET not in wb.sheetnames: return
     ws = wb[MONTHLY_OVERVIEW_SHEET]
 
-    # Header/title and first Monday
-    write_overview_headers(ws, records)
+    # Limpiar tablero si es calendario local
+    if target_country:
+        for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
+            for row in layout["event_rows"] + list(range(layout["base_row"], layout["end_row"] + 1)):
+                for col in range(4, 11):
+                    c = get_writable_cell(ws, row, col)
+                    c.value = None
+                    c.fill = PatternFill(fill_type=None)
 
-    # Events
+    write_overview_headers(ws, records)
     write_overview_events(ws, records)
 
     first_monday = first_visible_monday(records)
-    if not first_monday:
-        logging.warning("Could not determine first visible Monday for MONTHLY OVERVIEW.")
-        return
-
+    if not first_monday: return
     used_weeks = set()
 
     for rec in records:
         fields = rec.get("fields", rec)
+        if asset_is_event(fields): continue
 
+        # Filtro estricto para países locales
+        if target_country:
+            included, _ = collect_included_countries(
+                youtube_channel=fields.get(AT_FIELDS["youtube_channel"]),
+                region=fields.get(AT_FIELDS["region"]),
+                notes=fields.get(AT_FIELDS["notes"]),
+                excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
+                channel_id_to_name_map=channel_id_to_name_map,
+            )
+            if target_country not in included: continue
+            
         if asset_is_event(fields):
             continue
 
@@ -482,7 +483,7 @@ def populate_monthly_overview(
             auto_adjust_overview_row_height(ws, target_row, min_height=26, per_line=16)
             auto_adjust_overview_row_height(ws, target_row + 1, min_height=22, per_line=16)
         else:
-            line1, line2, geofenced = build_overview_lines(fields, channel_id_to_name_map=channel_id_to_name_map)
+            line1, line2, geofenced = build_overview_lines(fields, channel_id_to_name_map=channel_id_to_name_map, target_country=target_country) # PASAMOS EL PAÍS
             write_overview_cell(ws, target_row, target_col, line1, line2, content_type, geofenced)
             auto_adjust_overview_row_height(ws, target_row)
 

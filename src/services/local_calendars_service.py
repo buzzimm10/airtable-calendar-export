@@ -19,7 +19,9 @@ from openpyxl.styles import PatternFill, Font, Alignment
 def generate_local_calendars(master_path: str, output_dir: str, channel_type: str, 
                              selected_countries: Optional[List[str]] = None,
                              month_str: str = "2026-05", 
-                             dc_blocks: Optional[dict] = None):
+                             dc_blocks: Optional[dict] = None,
+                             records: Optional[list] = None, # <-- NUEVO
+                             channel_id_to_name_map: Optional[dict] = None): # <-- NUEVO
     
     if not os.path.exists(master_path): return None
 
@@ -139,31 +141,35 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         # ---------------- OCULTAR EXCEDENTES (PURGA RADICAL) ----------------
         country_names_lower = [c.lower() for c in master_countries]
         
-        for r in range(1, ws.max_row + 1):
+        for r in range(1, 400): # Barremos hasta la fila 400 para asegurar que destruimos los contadores
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             
-            # 1. Hiding Branding & Comments
+            # Ocultar Branding & Comments
             if any(x in val_a for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
                any(x in val_b for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]):
                 ws.row_dimensions[r].hidden = True
-                for offset in range(1, 8): # Ocultamos hasta 7 filas debajo por si el bug abarca múltiples
-                    if r + offset <= ws.max_row:
-                        if get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
-                            ws.row_dimensions[r+offset].hidden = True
-                        else:
-                            break
             
-            # 2. Hiding Tiers de Status Conforming y Rollout
-            if val_b == "total" or val_c == "total" or val_b in country_names_lower or val_a in country_names_lower:
+            # ANIQUILACIÓN TOTAL DE STATUS CONFORMING Y CONTADORES
+            if "status conforming" in val_a or "status conforming" in val_b or \
+               val_b == "total" or val_c == "total" or \
+               val_b in country_names_lower or val_a in country_names_lower:
                 ws.row_dimensions[r].hidden = True
-                
-        # 3. NUKE: Ocultar ABSOLUTAMENTE TODO debajo del último bloque semanal (Destruye los contadores)
+
+        # Ocultamos todo lo que esté debajo de la última semana procesada
         if last_processed_row > 0:
-            # Damos un margen de 15 filas hacia abajo (para cubrir Comments de la última semana)
-            for r in range(last_processed_row + 15, ws.max_row + 1):
+            for r in range(last_processed_row + 5, 500): 
                 ws.row_dimensions[r].hidden = True
+
+        # --- GENERAR OVERVIEW LOCAL PARA DC Y DJR ---
+        if records:
+            if is_djr:
+                from exporters.monthly_overview_djr import populate_monthly_overview_djr
+                populate_monthly_overview_djr(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=country)
+            else:
+                from exporters.monthly_overview import populate_monthly_overview
+                populate_monthly_overview(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=country)
 
         clean_country = country.replace("/", "_").replace(" ", "_")
         filename = f"{month_num}_Social Media Calendar {brand_label} YouTube EMEA - {month_name_year} - {clean_country}.xlsx"

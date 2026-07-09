@@ -210,7 +210,9 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             channel_type="DC",
             selected_countries=selected_countries,
             month_str=m_str,
-            dc_blocks=blocks  # Le pasamos el mapeo dinámico exacto
+            dc_blocks=blocks,
+            records=records, # <-- PASAMOS LA DATA
+            channel_id_to_name_map=channel_id_to_name_map # <-- PASAMOS EL MAPA
         )
     
     logging.info("Done.")

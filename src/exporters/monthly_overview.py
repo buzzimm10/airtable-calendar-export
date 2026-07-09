@@ -417,7 +417,10 @@ def populate_monthly_overview(
     # Limpiar tablero si es calendario local
     if target_country:
         for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
-            for row in layout["event_rows"] + list(range(layout["base_row"], layout["end_row"] + 1)):
+            # Convertimos la tupla a lista para evitar el error de concatenación
+            event_rows_list = list(layout.get("event_rows", []))
+            content_rows_list = list(range(layout["base_row"], layout["end_row"] + 1))
+            for row in event_rows_list + content_rows_list:
                 for col in range(4, 11):
                     c = get_writable_cell(ws, row, col)
                     c.value = None

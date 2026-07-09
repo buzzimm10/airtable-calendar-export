@@ -20,8 +20,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                              selected_countries: Optional[List[str]] = None,
                              month_str: str = "2026-05", 
                              dc_blocks: Optional[dict] = None,
-                             records: Optional[list] = None, # <-- NUEVO
-                             channel_id_to_name_map: Optional[dict] = None): # <-- NUEVO
+                             records: Optional[list] = None, 
+                             channel_id_to_name_map: Optional[dict] = None):
     
     if not os.path.exists(master_path): return None
 
@@ -44,7 +44,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
 
-    # --- DEFINICIÓN DE ESTILOS UNIFICADOS ---
     fill_grey = PatternFill(fill_type="solid", fgColor="D0CECE")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
@@ -54,7 +53,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if not row_idx: return
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 15  # Altura reducida
+        sheet.row_dimensions[row_idx].height = 15  
         for c in range(2, 34): 
             cell = sheet.cell(row=row_idx, column=c)
             cell.fill = fill_color
@@ -92,21 +91,28 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             if country_idx == -1: country_wb.close(); continue
                 
             for week_num, layout in djr_layout.items():
-                my_rollout_row = layout["country_rows"][0] + country_idx
+                rollout_start = layout["country_rows"][0]
+                my_rollout_row = rollout_start + country_idx
                 
-                # Actualizamos la última fila para el Nuke
+                # EXPLICITO: Ocultar Tiers y Comentarios de DJR obligatoriamente
+                for i in range(len(master_countries)):
+                    ws.row_dimensions[rollout_start + i].hidden = True
+                if "status_rows" in layout:
+                    for i in range(len(master_countries)):
+                        ws.row_dimensions[layout["status_rows"][0] + i].hidden = True
+                for r in layout.get("comments_rows", {}).values():
+                    ws.row_dimensions[r].hidden = True
+
                 tc_r = layout.get("tc_row", 0)
                 if tc_r > last_processed_row: last_processed_row = tc_r
                 
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
                         cell_val = str(ws.cell(row=my_rollout_row, column=col).value).strip().upper()
-                        
                         if "YES" not in cell_val:
-                            rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"], layout["tx_row"], layout["tc_row"]]
-                            rows_to_clear.extend(layout["comments_rows"].values())
+                            rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"], layout.get("tx_row"), layout.get("tc_row")]
+                            rows_to_clear.extend(layout.get("comments_rows", {}).values())
                             for r in rows_to_clear: clear_cell(ws, r, col)
-                        
                         elif not is_israel:
                             clear_cell(ws, layout.get("tx_row"), col)
                             clear_cell(ws, layout.get("tc_row"), col)
@@ -123,6 +129,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 country_row_rollout = block.rollout_country_rows.get(target_key) if target_key else None
                 
                 if block.end_row > last_processed_row: last_processed_row = block.end_row
+
+                # EXPLICITO: Ocultar Tiers y Comentarios de DC obligatoriamente
+                for r in block.rollout_country_rows.values(): ws.row_dimensions[r].hidden = True
+                for r in block.status_country_rows.values(): ws.row_dimensions[r].hidden = True
+                if block.comments_row: ws.row_dimensions[block.comments_row].hidden = True
                 
                 if country_row_rollout:
                     for col in range(4, 34): 
@@ -141,28 +152,25 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         # ---------------- OCULTAR EXCEDENTES (PURGA RADICAL) ----------------
         country_names_lower = [c.lower() for c in master_countries]
         
-        for r in range(1, 400): # Barremos hasta la fila 400 para asegurar que destruimos los contadores
+        for r in range(1, 400):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             
-            # Ocultar Branding & Comments
             if any(x in val_a for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
                any(x in val_b for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]):
                 ws.row_dimensions[r].hidden = True
+                for offset in range(1, 8):
+                    if r + offset <= ws.max_row and get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
+                        ws.row_dimensions[r+offset].hidden = True
+                    else: break
             
-            # ANIQUILACIÓN TOTAL DE STATUS CONFORMING Y CONTADORES
-            if "status conforming" in val_a or "status conforming" in val_b or \
-               val_b == "total" or val_c == "total" or \
-               val_b in country_names_lower or val_a in country_names_lower:
+            if val_b == "total" or val_c == "total" or val_b in country_names_lower or val_a in country_names_lower or "status conforming" in val_b or "status conforming" in val_a:
                 ws.row_dimensions[r].hidden = True
 
-        # Ocultamos todo lo que esté debajo de la última semana procesada
         if last_processed_row > 0:
-            for r in range(last_processed_row + 5, 500): 
-                ws.row_dimensions[r].hidden = True
+            for r in range(last_processed_row + 5, 500): ws.row_dimensions[r].hidden = True
 
-        # --- GENERAR OVERVIEW LOCAL PARA DC Y DJR ---
         if records:
             if is_djr:
                 from exporters.monthly_overview_djr import populate_monthly_overview_djr

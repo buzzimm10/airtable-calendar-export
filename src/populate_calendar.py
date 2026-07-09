@@ -184,11 +184,12 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
     # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
     from datetime import date
     month_name_upper = month_name_from_records(records).capitalize()
+    month_abbr = month_name_upper[:3] # <-- MAX 31 CARACTERES PARA EVITAR CORRUPCIÓN
     
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
-            # 1. Cambiar nombre de la pestaña
-            new_title = f"YT DC EMEA {month_name_upper} Highlights"
+            # 1. Cambiar nombre de la pestaña de forma segura
+            new_title = f"YT DC EMEA {month_abbr} Highlights"
             wb[sn].title = new_title
             
             # 2. Inyectar la fecha en E4 de forma segura

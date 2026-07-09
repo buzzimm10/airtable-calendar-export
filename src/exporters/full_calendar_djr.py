@@ -1,7 +1,7 @@
 import os
 import logging
 from collections import defaultdict, Counter
-from datetime import timedelta
+from datetime import timedelta, date
 
 from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -17,7 +17,12 @@ from config.layouts_djr import (
     DJR_WEEK_LAYOUT,
 )
 from config.countries_djr import DJR_SHEET_COUNTRIES, DJR_REGION_PRESETS
-from core.dates import month_name_from_records, resolve_target_month_year, first_visible_monday_of_target_month
+from core.dates import (
+    month_name_from_records, 
+    resolve_target_month_year, 
+    first_visible_monday_of_target_month,
+
+)
 
 from core.text_formatting import normalize_str, lower_clean
 from core.excel_utils import safe_set_value, center_wrap, cleanup_stale_merged_cells, get_writable_cell
@@ -111,7 +116,6 @@ def write_djr_start_date(ws, first_monday):
     cell.number_format="dd-mmm-yyyy"
 
 def write_djr_month_title(ws, records):
-    from core.dates import month_name_from_records
 
     month_name = month_name_from_records(records)
 
@@ -488,10 +492,9 @@ def populate_calendar_djr(
 
     cleanup_stale_merged_cells(ws)
     wb.template = False
+
     # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
-    from datetime import date
-    from core.dates import month_name_from_records, resolve_target_month_year
-    
+
     month_name_upper = month_name_from_records(records).capitalize()
     target_year, target_month = resolve_target_month_year(records)
     month_abbr = month_name_upper[:3] # <-- MAX 31 CARACTERES PARA EVITAR CORRUPCIÓN

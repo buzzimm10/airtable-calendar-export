@@ -4,7 +4,7 @@ import zipfile
 from typing import List, Optional
 from openpyxl import load_workbook
 from datetime import datetime
-from openpyxl.cell.cell import MergedCell # <-- NUEVA IMPORTACIÓN VITAL
+from openpyxl.cell.cell import MergedCell
 
 from config.layouts import TARGET_SHEET as dc_sheet_name
 from config.countries import SHEET_COUNTRIES as dc_master_countries
@@ -52,7 +52,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if not row_idx: return
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 20  
+        sheet.row_dimensions[row_idx].height = 15  # Altura reducida
         for c in range(2, 34): 
             cell = sheet.cell(row=row_idx, column=c)
             cell.fill = fill_color
@@ -60,13 +60,15 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 cell.font = font_bold
                 cell.alignment = align_right
 
-    # --- Helper Anti-Crash para celdas combinadas ---
     def clear_cell(sheet, row_idx, col_idx):
         if row_idx and col_idx:
             cell_obj = sheet.cell(row=row_idx, column=col_idx)
-            # Solo la limpiamos si es una celda real, esquivando los MergedCells
             if not isinstance(cell_obj, MergedCell):
                 cell_obj.value = None
+
+    def get_val(sheet, r, c):
+        v = sheet.cell(row=r, column=c).value
+        return str(v).strip().lower() if v is not None else ""
 
     for country in countries_to_process:
         if country.lower() in ["spain", "españa"]: continue
@@ -80,6 +82,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             
         ws = country_wb[sheet_name]
         is_israel = country.lower() == "israel"
+        last_processed_row = 0
 
         # ---------------- LÓGICA DISNEY JUNIOR ----------------
         if is_djr:
@@ -88,6 +91,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 
             for week_num, layout in djr_layout.items():
                 my_rollout_row = layout["country_rows"][0] + country_idx
+                
+                # Actualizamos la última fila para el Nuke
+                tc_r = layout.get("tc_row", 0)
+                if tc_r > last_processed_row: last_processed_row = tc_r
+                
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
                         cell_val = str(ws.cell(row=my_rollout_row, column=col).value).strip().upper()
@@ -112,6 +120,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 target_key = next((k for k in block.rollout_country_rows.keys() if k.lower() == country.lower()), None)
                 country_row_rollout = block.rollout_country_rows.get(target_key) if target_key else None
                 
+                if block.end_row > last_processed_row: last_processed_row = block.end_row
+                
                 if country_row_rollout:
                     for col in range(4, 34): 
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
@@ -130,20 +140,29 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         country_names_lower = [c.lower() for c in master_countries]
         
         for r in range(1, ws.max_row + 1):
-            val_b = str(ws.cell(row=r, column=2).value).strip().lower()
-            val_c = str(ws.cell(row=r, column=3).value).strip().lower()
+            val_a = get_val(ws, r, 1)
+            val_b = get_val(ws, r, 2)
+            val_c = get_val(ws, r, 3)
             
             # 1. Hiding Branding & Comments
-            if val_b in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]:
+            if any(x in val_a for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
+               any(x in val_b for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]):
                 ws.row_dimensions[r].hidden = True
-                for offset in range(1, 4):
-                    if r + offset <= ws.max_row and str(ws.cell(row=r+offset, column=2).value).strip() == "":
-                        ws.row_dimensions[r+offset].hidden = True
-                    else:
-                        break
+                for offset in range(1, 8): # Ocultamos hasta 7 filas debajo por si el bug abarca múltiples
+                    if r + offset <= ws.max_row:
+                        if get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
+                            ws.row_dimensions[r+offset].hidden = True
+                        else:
+                            break
             
-            # 2. Hiding Contadores de Países al final del Excel & Filas de Tiers
-            if val_b == "total" or val_c == "total" or val_b in country_names_lower:
+            # 2. Hiding Tiers de Status Conforming y Rollout
+            if val_b == "total" or val_c == "total" or val_b in country_names_lower or val_a in country_names_lower:
+                ws.row_dimensions[r].hidden = True
+                
+        # 3. NUKE: Ocultar ABSOLUTAMENTE TODO debajo del último bloque semanal (Destruye los contadores)
+        if last_processed_row > 0:
+            # Damos un margen de 15 filas hacia abajo (para cubrir Comments de la última semana)
+            for r in range(last_processed_row + 15, ws.max_row + 1):
                 ws.row_dimensions[r].hidden = True
 
         clean_country = country.replace("/", "_").replace(" ", "_")

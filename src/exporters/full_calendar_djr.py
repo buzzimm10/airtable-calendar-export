@@ -490,17 +490,17 @@ def populate_calendar_djr(
     wb.template = False
     # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
     from datetime import date
+    from core.dates import month_name_from_records, resolve_target_month_year
     
     month_name_upper = month_name_from_records(records).capitalize()
     target_year, target_month = resolve_target_month_year(records)
+    month_abbr = month_name_upper[:3] # <-- MAX 31 CARACTERES PARA EVITAR CORRUPCIÓN
 
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
-            # 1. Cambiar nombre de la pestaña
-            new_title = f"YT DJR EMEA {month_name_upper} Highlights"
+            new_title = f"YT DJR EMEA {month_abbr} Highlights"
             wb[sn].title = new_title
             
-            # 2. Inyectar la fecha en E4 de forma segura
             if target_year and target_month:
                 ws_high = wb[new_title]
                 safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="mmm-yy")

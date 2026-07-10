@@ -286,7 +286,7 @@ def populate_monthly_overview_djr(
         if asset_is_event(fields):
             continue
             
-        # Filtro estricto para países locales
+        # Filtro estricto para países locales (Case-Insensitive)
         if target_country:
             from core.countries import collect_included_countries
             included, _ = collect_included_countries(
@@ -296,7 +296,9 @@ def populate_monthly_overview_djr(
                 excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
                 channel_id_to_name_map=channel_id_to_name_map,
             )
-            if target_country not in included: continue
+            included_upper = [c.upper() for c in included]
+            if target_country.upper() not in included_upper:
+                continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))
         if owner == "Mediaplanning" and not enable_mediaplanning:

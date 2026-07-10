@@ -428,7 +428,7 @@ def populate_monthly_overview(
         fields = rec.get("fields", rec)
         if asset_is_event(fields): continue
 
-        # Filtro estricto para países locales
+        # Filtro estricto para países locales (Case-Insensitive)
         if target_country:
             included, _ = collect_included_countries(
                 youtube_channel=fields.get(AT_FIELDS["youtube_channel"]),
@@ -437,7 +437,9 @@ def populate_monthly_overview(
                 excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
                 channel_id_to_name_map=channel_id_to_name_map,
             )
-            if target_country not in included: continue
+            included_upper = [c.upper() for c in included]
+            if target_country.upper() not in included_upper:
+                continue
             
         if asset_is_event(fields):
             continue

@@ -97,14 +97,11 @@ with st.sidebar:
         json_path = st.text_input("JSON path", value="data/sample_airtable.json") if use_json else None
         
         template_path = st.text_input("Template path", value=default_template_path)
-        output_folder = st.text_input("Output folder", value="output")
-
-    st.divider()
+        output_folder = st.text_input("Output folder", value=f"output/{channel.replace(' ', '_')}")
 
     st.divider()
 
     # ---> MEJORADO: Checkbox condicional y optimizado para la Fase 2 <---
-    st.divider()
 
     st.markdown("### 📥 Opciones de Exportación")
     export_master = st.checkbox("📥 Exportar Master Calendar (General)", value=True)
@@ -114,14 +111,17 @@ with st.sidebar:
     if export_individual:
         country_options = dc_countries if channel == "Disney Channel" else djr_countries
         country_options = [c for c in country_options if c.lower() not in ["spain", "españa"]]
-        selected_countries = st.multiselect(
-            "Selecciona para qué países generar calendarios:",
-            options=country_options,
-            default=country_options
-        )
+        
+        # MAGIA UI: Lo metemos en un acordeón desplegable
+        with st.expander("🌍 Seleccionar Países (Haz clic para abrir/cerrar)", expanded=True):
+            st.info("💡 Consejo: Puedes limpiar la lista en la 'x' de la derecha para elegir solo los tuyos.")
+            selected_countries = st.multiselect(
+                "Países a generar:",
+                options=country_options,
+                default=country_options
+            )
     else:
-        # Si el checkbox está apagado, pasamos una lista vacía para indicarle 
-        # al backend que no debe procesar ningún calendario de país.
+        # Si el checkbox está apagado, pasamos una lista vacía
         selected_countries = []
         
     st.divider()

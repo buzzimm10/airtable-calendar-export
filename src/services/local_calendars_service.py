@@ -18,7 +18,6 @@ from core.excel_utils import safe_set_value
 from openpyxl.styles import PatternFill, Font, Alignment
 
 def get_clean_country_name(name: str) -> str:
-    """Elimina el idioma entre paréntesis, ej: 'Israel (Hebrew)' -> 'Israel'"""
     return re.sub(r'\s*\(.*?\)', '', name).strip()
 
 def generate_local_calendars(master_path: str, output_dir: str, channel_type: str, 
@@ -91,13 +90,21 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         is_israel = clean_country.lower() == "israel"
         last_processed_row = 0
 
-        # Ocultar columna AG (Total VOD)
         ws.column_dimensions['AG'].hidden = True
 
+        # Dar "aire" de forma segura incrementando el tamaño de la fila WEEK, sin desocultar nada.
         for r in range(1, 400):
             if get_val(ws, r, 2).startswith("week "):
-                ws.row_dimensions[r - 1].hidden = False
-                ws.row_dimensions[r - 1].height = 25
+                ws.row_dimensions[r].height = 30 
+
+        # --- GENERAR OVERVIEW LOCAL PRIMERO (Antes de renombrar pestañas) ---
+        if records:
+            if is_djr:
+                from exporters.monthly_overview_djr import populate_monthly_overview_djr
+                populate_monthly_overview_djr(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=clean_country)
+            else:
+                from exporters.monthly_overview import populate_monthly_overview
+                populate_monthly_overview(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=clean_country)
 
         # ---------------- LÓGICA DISNEY JUNIOR ----------------
         if is_djr:
@@ -105,8 +112,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             if country_idx == -1: country_wb.close(); continue
                 
             for week_num, layout in djr_layout.items():
-                rollout_start = layout["country_rows"][0]
-                my_rollout_row = rollout_start + country_idx
+                my_rollout_row = layout["country_rows"][0] + country_idx
                 
                 tc_r = layout.get("tc_row", 0)
                 if tc_r > last_processed_row: last_processed_row = tc_r
@@ -125,7 +131,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     style_recycled_row(ws, layout.get("tx_row"), "USED OR NOT", fill_grey)
                     style_recycled_row(ws, layout.get("tc_row"), "LINK YOUTUBE", fill_white)
                 else:
-                    # FIX TYPING PYLANCE
                     israel_tx = layout.get("tx_row")
                     if israel_tx: 
                         ws.row_dimensions[israel_tx].hidden = False
@@ -134,6 +139,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if israel_tc: 
                         ws.row_dimensions[israel_tc].hidden = False
                         ws.row_dimensions[israel_tc].height = 20
+                    
+                    status_rows = layout.get("status_rows", [])
+                    if status_rows and len(status_rows) >= 2:
+                        style_recycled_row(ws, status_rows[0], "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, status_rows[1], "LINK YOUTUBE", fill_white)
 
         # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
@@ -158,7 +168,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     style_recycled_row(ws, block.tx_row, "USED OR NOT", fill_grey)
                     style_recycled_row(ws, block.tc_row, "LINK YOUTUBE", fill_white)
                 else:
-                    # FIX TYPING PYLANCE
                     israel_dc_tx = block.tx_row
                     if israel_dc_tx: 
                         ws.row_dimensions[israel_dc_tx].hidden = False
@@ -167,6 +176,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if israel_dc_tc: 
                         ws.row_dimensions[israel_dc_tc].hidden = False
                         ws.row_dimensions[israel_dc_tc].height = 20
+                    
+                    status_rows = list(block.status_country_rows.values())
+                    if len(status_rows) >= 2:
+                        style_recycled_row(ws, status_rows[0], "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, status_rows[1], "LINK YOUTUBE", fill_white)
 
         # ---------------- OCULTAR EXCEDENTES (PURGA RADICAL) ----------------
         country_names_lower = [c.lower() for c in master_countries]
@@ -190,13 +204,12 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if last_processed_row > 0:
             for r in range(last_processed_row + 5, 500): ws.row_dimensions[r].hidden = True
 
-        # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY (FIX PYLANCE MERGEDCELL) ---
+        # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:
             ws_tmp = country_wb[sn]
             for r in range(1, 15):
                 for c in range(1, 10):
                     c_obj = ws_tmp.cell(row=r, column=c)
-                    # Solo reemplazamos si es una celda real, esquivando las combinadas
                     if not isinstance(c_obj, MergedCell):
                         v = c_obj.value
                         if isinstance(v, str) and "EMEA" in v:
@@ -206,15 +219,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             if "EMEA" in sn:
                 new_title = sn.replace("EMEA", clean_country.upper())
                 country_wb[sn].title = new_title[:31] 
-
-        # --- GENERAR OVERVIEW LOCAL ---
-        if records:
-            if is_djr:
-                from exporters.monthly_overview_djr import populate_monthly_overview_djr
-                populate_monthly_overview_djr(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=country)
-            else:
-                from exporters.monthly_overview import populate_monthly_overview
-                populate_monthly_overview(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=country)
 
         filename = f"{month_num}_Social Media Calendar {brand_label} YouTube {clean_country} - {month_name_year}.xlsx"
         output_path = os.path.join(output_dir, filename)

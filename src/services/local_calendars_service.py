@@ -15,7 +15,7 @@ from config.countries_djr import DJR_SHEET_COUNTRIES as djr_master_countries
 from config.layouts_djr import DJR_WEEK_LAYOUT as djr_layout
 from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
-from openpyxl.styles import PatternFill, Font, Alignment, Border
+from openpyxl.styles import PatternFill, Font, Alignment
 
 def get_clean_country_name(name: str) -> str:
     return re.sub(r'\s*\(.*?\)', '', name).strip()
@@ -56,12 +56,18 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 15  
-        for c in range(2, 34): 
+        
+        # MAGIA: Vaciamos absolutamente todos los "YES/NO" y datos viejos de esta fila
+        for c in range(3, 34): 
             cell = sheet.cell(row=row_idx, column=c)
+            if not isinstance(cell, MergedCell):
+                cell.value = None
             cell.fill = fill_color
-            if c == 2:
-                cell.font = font_bold
-                cell.alignment = Alignment(horizontal="right", vertical="center")
+            
+        cell2 = sheet.cell(row=row_idx, column=2)
+        cell2.fill = fill_color
+        cell2.font = font_bold
+        cell2.alignment = Alignment(horizontal="right", vertical="center")
 
     def clear_cell(sheet, row_idx, col_idx):
         if isinstance(row_idx, int) and isinstance(col_idx, int):
@@ -98,13 +104,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         ws = country_wb[sheet_name]
         is_israel = clean_country.lower() == "israel"
         
-        # Variables estrictamente tipadas como enteros para calmar a Pylance
         max_content_row: int = 0
         current_max_row: int = ws.max_row if isinstance(ws.max_row, int) else 500
 
         ws.column_dimensions['AG'].hidden = True
 
-        # --- GENERAR OVERVIEW LOCAL PRIMERO ---
         if records:
             if is_djr:
                 from exporters.monthly_overview_djr import populate_monthly_overview_djr
@@ -122,7 +126,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rollout_start = layout["country_rows"][0]
                 my_rollout_row = rollout_start + country_idx
                 
-                # Actualizar la fila más baja usada en esta semana
                 tc_r = layout.get("tc_row")
                 if isinstance(tc_r, int) and tc_r > max_content_row:
                     max_content_row = tc_r
@@ -183,29 +186,38 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
                         style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
 
-        # ---------------- FRANCOTIRADOR DE STATUS CONFORMING Y COMMENTS ----------------
-        sniper_limit: int = max_content_row + 15 if max_content_row > 0 else 400
+        # ---------------- LA PURGA RADICAL RESTAURADA ----------------
+        country_names_lower = [c.lower() for c in master_countries]
+        sniper_limit: int = max_content_row + 20 if max_content_row > 0 else 400
+        
         for r in range(1, sniper_limit):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
+            val_d = get_val(ws, r, 4)
             
-            # Matar filas de Status Conforming
-            if "status conforming" in val_a or "status conforming" in val_b:
+            combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
+            
+            # 1. Matar Branding, Status Conforming, Comments, Endcards
+            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments"]):
                 ws.row_dimensions[r].hidden = True
-            
-            # Matar filas de Comments
-            if val_c == "comments" or val_b == "comments":
+                # Matar también las siguientes filas ocultas que pertenecen al mismo bloque
+                for offset in range(1, 6):
+                    if r + offset <= current_max_row and get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
+                        ws.row_dimensions[r+offset].hidden = True
+                    else: break
+
+            # 2. Matar Tiers
+            if val_b.startswith("tier ") or val_a.startswith("tier "):
                 ws.row_dimensions[r].hidden = True
 
-            # Matar Branding
-            if val_b in ["watermark", "bug", "copyright", "endcard", "branding"]:
+            # 3. Matar el resto de Países que NO fueron reciclados (Portugal, Norway, etc)
+            if any(c in val_a + val_b for c in country_names_lower) or val_b == "total" or val_c == "total":
                 ws.row_dimensions[r].hidden = True
 
-            # Dar Aire a la semana (aumentando la altura)
+            # 4. Dar Aire a la semana (aumentando la altura)
             if val_b.startswith("week "):
                 ws.row_dimensions[r].height = 40 
-                ws.row_dimensions[r].hidden = False
 
         # ---------------- LA GUILLOTINA FINAL (Fila 273+) ----------------
         if max_content_row > 0:

@@ -192,51 +192,36 @@ def write_overview_cell(ws, row: int, col: int, line1: str, line2: str, content_
     cell.font = Font(bold=True, color=font_color)
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-def write_vertical_short_cell(ws, top_row: int, col: int, record: Dict):
-    """
-    Vertical Shorts use 2 stacked cells:
-    - top cell: PROPERTY (uppercase) + Strategy, centered, black
-    - bottom cell: Region/Tiers, centered, bold, red
-      or yellow if SPAIN ONLY
-    Ignores geofenced purple styling for this content type.
-    """
+def write_vertical_short_cell(ws, top_row: int, col: int, record: Dict, target_country: Optional[str] = None):
     top_cell = get_writable_cell(ws, top_row, col)
     bottom_cell = get_writable_cell(ws, top_row + 1, col)
 
     prop_val = record.get(AT_FIELDS["property"])
-    if isinstance(prop_val, list):
-        prop = " / ".join(normalize_str(p) for p in prop_val if normalize_str(p))
-    else:
-        prop = normalize_str(prop_val)
+    if isinstance(prop_val, list): prop = " / ".join(normalize_str(p) for p in prop_val if normalize_str(p))
+    else: prop = normalize_str(prop_val)
     prop = prop.upper()
 
     strat_val = record.get(AT_FIELDS["strategy"])
-    if isinstance(strat_val, list):
-        strat = " / ".join(normalize_str(s) for s in strat_val if normalize_str(s))
-    else:
-        strat = normalize_str(strat_val)
+    if isinstance(strat_val, list): strat = " / ".join(normalize_str(s) for s in strat_val if normalize_str(s))
+    else: strat = normalize_str(strat_val)
 
     tier_text = normalize_overview_region(record.get(AT_FIELDS["region"]))
 
-    # top cell text
-    top_text = prop
-    if strat:
-        top_text = f"{prop}\n{strat}"
-
+    top_text = f"{prop}\n{strat}" if strat else prop
     top_cell.value = top_text
     top_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     top_cell.font = Font(bold=True, color="FF000000")
     top_cell.fill = PatternFill(fill_type="solid", fgColor=OVERVIEW_FILL_COLORS["Vertical Short"])
 
-    # bottom cell text
-    bottom_cell.value = tier_text
-    bottom_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    if tier_text == "SPAIN ONLY":
-        bottom_cell.font = Font(bold=True, color="FFFFFF00")  # yellow
+    # MAGIA: Si es un país local, NO escribimos los Tiers
+    if target_country:
+        bottom_cell.value = ""
     else:
-        bottom_cell.font = Font(bold=True, color="FFFF0000")  # red
+        bottom_cell.value = tier_text
 
+    bottom_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    if tier_text == "SPAIN ONLY": bottom_cell.font = Font(bold=True, color="FFFFFF00")
+    else: bottom_cell.font = Font(bold=True, color="FFFF0000")
     bottom_cell.fill = PatternFill(fill_type="solid", fgColor=OVERVIEW_FILL_COLORS["Vertical Short"])
 
 def auto_adjust_overview_row_height(ws, row: int, min_height: float = 24, per_line: float = 16, chars_per_line: int = 22):
@@ -402,32 +387,34 @@ def populate_monthly_overview(
     records: List[Dict],
     enable_mediaplanning: bool = True,
     channel_id_to_name_map: Optional[Dict[str, str]] = None,
-    target_country: Optional[str] = None
+    target_country: Optional[str] = None 
 ):
-    """
-    Populate 'MONTHLY OVERVIEW YT DC EMEA'.
-
-    Uses visual calendar positioning based on the first visible Monday,
-    not Airtable Week of Month.
-    """
     if channel_id_to_name_map is None: channel_id_to_name_map = {}    
     if MONTHLY_OVERVIEW_SHEET not in wb.sheetnames: return
     ws = wb[MONTHLY_OVERVIEW_SHEET]
 
-    # Limpiar tablero si es calendario local
+    # Limpiar tablero si es calendario local y RESTAURAR COLOR GRIS
     if target_country:
+        fill_grey_80 = PatternFill(fill_type="solid", fgColor="808080")
         for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
-            # Convertimos la tupla a lista para evitar el error de concatenación
             event_rows_list = list(layout.get("event_rows", []))
             content_rows_list = list(range(layout["base_row"], layout["end_row"] + 1))
-            for row in event_rows_list + content_rows_list:
+            
+            # Limpiamos contenido pero restauramos el fondo gris a los Eventos
+            for row in event_rows_list:
+                for col in range(4, 11):
+                    c = get_writable_cell(ws, row, col)
+                    c.value = None
+                    c.fill = fill_grey_80
+            
+            # Limpiamos contenido y fondo del resto
+            for row in content_rows_list:
                 for col in range(4, 11):
                     c = get_writable_cell(ws, row, col)
                     c.value = None
                     c.fill = PatternFill(fill_type=None)
 
     write_overview_headers(ws, records)
-    write_overview_events(ws, records)
 
     first_monday = first_visible_monday(records)
     if not first_monday: return

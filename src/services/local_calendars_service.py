@@ -94,14 +94,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rollout_start = layout["country_rows"][0]
                 my_rollout_row = rollout_start + country_idx
                 
-                # EXPLICITO: Ocultar Tiers y Comentarios de DJR obligatoriamente
                 for i in range(len(master_countries)):
                     ws.row_dimensions[rollout_start + i].hidden = True
                 if "status_rows" in layout:
                     for i in range(len(master_countries)):
                         ws.row_dimensions[layout["status_rows"][0] + i].hidden = True
-                for r in layout.get("comments_rows", {}).values():
-                    ws.row_dimensions[r].hidden = True
 
                 tc_r = layout.get("tc_row", 0)
                 if tc_r > last_processed_row: last_processed_row = tc_r
@@ -111,7 +108,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         cell_val = str(ws.cell(row=my_rollout_row, column=col).value).strip().upper()
                         if "YES" not in cell_val:
                             rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"], layout.get("tx_row"), layout.get("tc_row")]
-                            rows_to_clear.extend(layout.get("comments_rows", {}).values())
                             for r in rows_to_clear: clear_cell(ws, r, col)
                         elif not is_israel:
                             clear_cell(ws, layout.get("tx_row"), col)
@@ -120,6 +116,12 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if not is_israel:
                     style_recycled_row(ws, layout.get("tx_row"), "USED OR NOT", fill_grey)
                     style_recycled_row(ws, layout.get("tc_row"), "LINK YOUTUBE", fill_white)
+                else:
+                    # FORZAR A ISRAEL A MOSTRAR LAS FILAS (Unhide)
+                    tx_r = layout.get("tx_row")
+                    tc_r = layout.get("tc_row")
+                    if tx_r is not None: ws.row_dimensions[tx_r].hidden = False
+                    if tc_r is not None: ws.row_dimensions[tc_r].hidden = False
 
         # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
@@ -130,10 +132,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 
                 if block.end_row > last_processed_row: last_processed_row = block.end_row
 
-                # EXPLICITO: Ocultar Tiers y Comentarios de DC obligatoriamente
                 for r in block.rollout_country_rows.values(): ws.row_dimensions[r].hidden = True
                 for r in block.status_country_rows.values(): ws.row_dimensions[r].hidden = True
-                if block.comments_row: ws.row_dimensions[block.comments_row].hidden = True
                 
                 if country_row_rollout:
                     for col in range(4, 34): 
@@ -148,6 +148,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if not is_israel:
                     style_recycled_row(ws, block.tx_row, "USED OR NOT", fill_grey)
                     style_recycled_row(ws, block.tc_row, "LINK YOUTUBE", fill_white)
+                else:
+                    # FORZAR A ISRAEL A MOSTRAR LAS FILAS (Unhide)
+                    if block.tx_row: ws.row_dimensions[block.tx_row].hidden = False
+                    if block.tc_row: ws.row_dimensions[block.tc_row].hidden = False
 
         # ---------------- OCULTAR EXCEDENTES (PURGA RADICAL) ----------------
         country_names_lower = [c.lower() for c in master_countries]
@@ -157,15 +161,19 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             
+            # Buscar Comments en A, B o C aniquilará la fila roja de Status Conforming
             if any(x in val_a for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
-               any(x in val_b for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]):
+               any(x in val_b for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
+               any(x in val_c for x in ["comments"]):
                 ws.row_dimensions[r].hidden = True
                 for offset in range(1, 8):
                     if r + offset <= ws.max_row and get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
                         ws.row_dimensions[r+offset].hidden = True
                     else: break
             
-            if val_b == "total" or val_c == "total" or val_b in country_names_lower or val_a in country_names_lower or "status conforming" in val_b or "status conforming" in val_a:
+            if "status conforming" in val_a or "status conforming" in val_b or \
+               val_b == "total" or val_c == "total" or \
+               val_b in country_names_lower or val_a in country_names_lower:
                 ws.row_dimensions[r].hidden = True
 
         if last_processed_row > 0:

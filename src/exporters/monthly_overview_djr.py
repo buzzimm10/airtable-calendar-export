@@ -200,16 +200,17 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
 
     top_cell.font = Font(bold=True, color="FF000000")
     top_cell.alignment = center_wrap()
-    
-    # MAGIA: Si NO es un país local, escribimos la fila roja/amarilla de Tiers
+    bottom_cell.alignment = center_wrap()
+
+    # MAGIA: Si NO es un país local, escribimos la fila de Tiers
     if not target_country:
         bottom_cell.value = bottom_text
-        bottom_cell.alignment = center_wrap()
         if bottom_text == "SPAIN ONLY":
             bottom_cell.font = Font(bold=True, color="FFFFFF00")
         else:
             bottom_cell.font = Font(bold=True, color="FFFF0000")
-
+    else:
+        bottom_cell.value = ""
 
 def write_djr_overview_header(ws, records):
     month_name = month_name_from_records(records)

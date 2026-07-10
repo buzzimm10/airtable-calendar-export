@@ -2,7 +2,7 @@ import os
 import logging
 import zipfile
 import re
-from typing import List, Optional
+from typing import List, Optional, Set
 from openpyxl import load_workbook
 from datetime import datetime
 from openpyxl.cell.cell import MergedCell
@@ -53,11 +53,15 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
 
     def style_recycled_row(sheet, row_idx, label, fill_color):
         if not isinstance(row_idx, int): return
+        
+        cell_a = sheet.cell(row=row_idx, column=1)
+        if not isinstance(cell_a, MergedCell):
+            cell_a.value = None
+
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 15  
+        sheet.row_dimensions[row_idx].height = 20  
         
-        # Limpiar y pintar toda la fila (Borra los YES/NO viejos)
         for c in range(3, 34): 
             cell = sheet.cell(row=row_idx, column=c)
             if not isinstance(cell, MergedCell):
@@ -83,7 +87,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     def format_israel_tx_tc(sheet, row_idx, is_tx=False):
         if not isinstance(row_idx, int): return
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 45 if is_tx else 25 
+        sheet.row_dimensions[row_idx].height = 60 if is_tx else 35 
         for c in range(4, 34):
             cell = sheet.cell(row=row_idx, column=c)
             if not isinstance(cell, MergedCell):
@@ -106,6 +110,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         
         max_content_row: int = 0
         current_max_row: int = ws.max_row if isinstance(ws.max_row, int) else 500
+        
+        safe_rows: Set[int] = set()
 
         ws.column_dimensions['AG'].hidden = True
 
@@ -141,18 +147,33 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                             clear_cell(ws, layout.get("tc_row"), col)
 
                 if not is_israel:
-                    style_recycled_row(ws, layout.get("tx_row"), "USED OR NOT", fill_grey)
-                    style_recycled_row(ws, layout.get("tc_row"), "LINK YOUTUBE", fill_white)
-                else:
-                    format_israel_tx_tc(ws, layout.get("tx_row"), is_tx=True)
-                    format_israel_tx_tc(ws, layout.get("tc_row"), is_tx=False)
+                    tx_val = layout.get("tx_row")
+                    tc_val = layout.get("tc_row")
+                    style_recycled_row(ws, tx_val, "USED OR NOT", fill_grey)
+                    style_recycled_row(ws, tc_val, "LINK YOUTUBE", fill_white)
                     
-                    # Buscar filas FÍSICAMENTE DEBAJO de TC IN & OUT
+                    if isinstance(tx_val, int): safe_rows.add(tx_val)
+                    if isinstance(tc_val, int): safe_rows.add(tc_val)
+                else:
+                    israel_tx = layout.get("tx_row")
+                    if isinstance(israel_tx, int): 
+                        format_israel_tx_tc(ws, israel_tx, is_tx=True)
+                        safe_rows.add(israel_tx)
+                        
+                    israel_tc = layout.get("tc_row")
+                    if isinstance(israel_tc, int): 
+                        format_israel_tx_tc(ws, israel_tc, is_tx=False)
+                        safe_rows.add(israel_tc)
+                    
                     available_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if isinstance(djr_tc, int) and r > djr_tc and r != my_rollout_row]
                     available_rows.sort()
                     if len(available_rows) >= 2:
-                        style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
-                        style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
+                        used_row = available_rows[0]
+                        link_row = available_rows[1]
+                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
+                        if isinstance(used_row, int): safe_rows.add(used_row)
+                        if isinstance(link_row, int): safe_rows.add(link_row)
 
         # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
@@ -176,47 +197,62 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                             clear_cell(ws, block.tc_row, col)
 
                 if not is_israel:
-                    style_recycled_row(ws, block.tx_row, "USED OR NOT", fill_grey)
-                    style_recycled_row(ws, block.tc_row, "LINK YOUTUBE", fill_white)
-                else:
-                    format_israel_tx_tc(ws, block.tx_row, is_tx=True)
-                    format_israel_tx_tc(ws, block.tc_row, is_tx=False)
+                    tx_val = block.tx_row
+                    tc_val = block.tc_row
+                    style_recycled_row(ws, tx_val, "USED OR NOT", fill_grey)
+                    style_recycled_row(ws, tc_val, "LINK YOUTUBE", fill_white)
                     
-                    # Buscar filas FÍSICAMENTE DEBAJO de TC IN & OUT
-                    available_rows = [r for r in block.rollout_country_rows.values() if isinstance(dc_tc, int) and r > dc_tc and r != country_row_rollout]
+                    if isinstance(tx_val, int): safe_rows.add(tx_val)
+                    if isinstance(tc_val, int): safe_rows.add(tc_val)
+                else:
+                    israel_dc_tx = block.tx_row
+                    if isinstance(israel_dc_tx, int): 
+                        format_israel_tx_tc(ws, israel_dc_tx, is_tx=True)
+                        safe_rows.add(israel_dc_tx)
+                        
+                    israel_dc_tc = block.tc_row
+                    if isinstance(israel_dc_tc, int): 
+                        format_israel_tx_tc(ws, israel_dc_tc, is_tx=False)
+                        safe_rows.add(israel_dc_tc)
+                    
+                    available_rows = list(block.rollout_country_rows.values())
+                    if country_row_rollout in available_rows: available_rows.remove(country_row_rollout)
                     available_rows.sort()
                     if len(available_rows) >= 2:
-                        style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
-                        style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
+                        used_row = available_rows[0]
+                        link_row = available_rows[1]
+                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
+                        if isinstance(used_row, int): safe_rows.add(used_row)
+                        if isinstance(link_row, int): safe_rows.add(link_row)
 
-        # ---------------- LA PURGA INVENCIBLE (LAS 11 FILAS) ----------------
+        # ---------------- EL FRANCOTIRADOR CON ESCUDO ----------------
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
         sniper_limit: int = max_content_row + 25 if max_content_row > 0 else 400
         
         for r in range(1, sniper_limit):
+            if r in safe_rows:
+                continue
+
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             val_d = get_val(ws, r, 4)
             combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
             
-            # Resetear la alarma cuando empieza una nueva semana
             if val_b.startswith("week "):
                 in_junk_section = False
             
-            # Activar alarma al detectar basura (Esto aniquila las 11 filas de Status Conforming seguidas)
             if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod"]):
                 in_junk_section = True
 
             if in_junk_section:
                 ws.row_dimensions[r].hidden = True
                 
-            # Ocultar Tiers extra
             if val_b.startswith("tier ") or val_a.startswith("tier "):
                 ws.row_dimensions[r].hidden = True
 
-            # Ocultar países no usados
             if any(c in val_a + val_b + val_c for c in country_names_lower) or val_b == "total" or val_c == "total":
                 ws.row_dimensions[r].hidden = True
 
@@ -231,7 +267,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if not isinstance(cell, MergedCell):
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
-                        cell.border = Border() # Borde invisible
+                        cell.border = Border() 
 
         # ---------------- LA GUILLOTINA FINAL (Fila 273+) ----------------
         if max_content_row > 0:

@@ -15,7 +15,7 @@ from config.countries_djr import DJR_SHEET_COUNTRIES as djr_master_countries
 from config.layouts_djr import DJR_WEEK_LAYOUT as djr_layout
 from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import PatternFill, Font, Alignment, Border
 
 def get_clean_country_name(name: str) -> str:
     return re.sub(r'\s*\(.*?\)', '', name).strip()
@@ -50,10 +50,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     fill_grey = PatternFill(fill_type="solid", fgColor="D0CECE")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
-    align_right = Alignment(horizontal="right", vertical="center")
 
     def style_recycled_row(sheet, row_idx, label, fill_color):
-        if not row_idx: return
+        if not isinstance(row_idx, int): return
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 15  
@@ -62,17 +61,27 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             cell.fill = fill_color
             if c == 2:
                 cell.font = font_bold
-                cell.alignment = align_right
+                cell.alignment = Alignment(horizontal="right", vertical="center")
 
     def clear_cell(sheet, row_idx, col_idx):
-        if row_idx and col_idx:
+        if isinstance(row_idx, int) and isinstance(col_idx, int):
             cell_obj = sheet.cell(row=row_idx, column=col_idx)
             if not isinstance(cell_obj, MergedCell):
                 cell_obj.value = None
 
     def get_val(sheet, r, c):
+        if not isinstance(r, int) or not isinstance(c, int): return ""
         v = sheet.cell(row=r, column=c).value
         return str(v).strip().lower() if v is not None else ""
+
+    def format_israel_tx_tc(sheet, row_idx, is_tx=False):
+        if not isinstance(row_idx, int): return
+        sheet.row_dimensions[row_idx].hidden = False
+        sheet.row_dimensions[row_idx].height = 45 if is_tx else 25 
+        for c in range(4, 34):
+            cell = sheet.cell(row=row_idx, column=c)
+            if not isinstance(cell, MergedCell):
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
     for country in selected_countries:
         if country.lower() in ["spain", "españa"]: continue
@@ -88,7 +97,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             
         ws = country_wb[sheet_name]
         is_israel = clean_country.lower() == "israel"
-        last_processed_row = 0
+        
+        # Variables estrictamente tipadas como enteros para calmar a Pylance
+        max_content_row: int = 0
+        current_max_row: int = ws.max_row if isinstance(ws.max_row, int) else 500
 
         ws.column_dimensions['AG'].hidden = True
 
@@ -110,17 +122,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rollout_start = layout["country_rows"][0]
                 my_rollout_row = rollout_start + country_idx
                 
-                # 1. OCULTAMIENTO MATEMÁTICO: Aniquila la lista de países y el Status Conforming
-                for i in range(len(master_countries)):
-                    ws.row_dimensions[rollout_start + i].hidden = True
-                
-                status_start = layout.get("status_rows", [0])[0]
-                if status_start:
-                    for i in range(len(master_countries)):
-                        ws.row_dimensions[status_start + i].hidden = True
-
-                tc_r = layout.get("tc_row", 0)
-                if tc_r > last_processed_row: last_processed_row = tc_r
+                # Actualizar la fila más baja usada en esta semana
+                tc_r = layout.get("tc_row")
+                if isinstance(tc_r, int) and tc_r > max_content_row:
+                    max_content_row = tc_r
                 
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
@@ -136,14 +141,13 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     style_recycled_row(ws, layout.get("tx_row"), "USED OR NOT", fill_grey)
                     style_recycled_row(ws, layout.get("tc_row"), "LINK YOUTUBE", fill_white)
                 else:
-                    israel_tx = layout.get("tx_row")
-                    if isinstance(israel_tx, int): 
-                        ws.row_dimensions[israel_tx].hidden = False
-                        ws.row_dimensions[israel_tx].height = 20
-                    israel_tc = layout.get("tc_row")
-                    if isinstance(israel_tc, int): 
-                        ws.row_dimensions[israel_tc].hidden = False
-                        ws.row_dimensions[israel_tc].height = 20
+                    format_israel_tx_tc(ws, layout.get("tx_row"), is_tx=True)
+                    format_israel_tx_tc(ws, layout.get("tc_row"), is_tx=False)
+                    
+                    available_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if r != my_rollout_row]
+                    if len(available_rows) >= 2:
+                        style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
 
         # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
@@ -152,13 +156,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 target_key = next((k for k in block.rollout_country_rows.keys() if k.lower() == country.lower()), None)
                 country_row_rollout = block.rollout_country_rows.get(target_key) if target_key else None
                 
-                if block.end_row > last_processed_row: last_processed_row = block.end_row
+                dc_tc = block.tc_row
+                if isinstance(dc_tc, int) and dc_tc > max_content_row:
+                    max_content_row = dc_tc
                 
-                # 1. OCULTAMIENTO MATEMÁTICO: Aniquila la lista de países y el Status Conforming
-                for r in block.rollout_country_rows.values(): ws.row_dimensions[r].hidden = True
-                for r in block.status_country_rows.values(): ws.row_dimensions[r].hidden = True
-                if block.comments_row: ws.row_dimensions[block.comments_row].hidden = True
-
                 if country_row_rollout:
                     for col in range(4, 34): 
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
@@ -173,41 +174,43 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     style_recycled_row(ws, block.tx_row, "USED OR NOT", fill_grey)
                     style_recycled_row(ws, block.tc_row, "LINK YOUTUBE", fill_white)
                 else:
-                    israel_dc_tx = block.tx_row
-                    if isinstance(israel_dc_tx, int): 
-                        ws.row_dimensions[israel_dc_tx].hidden = False
-                        ws.row_dimensions[israel_dc_tx].height = 20
-                    israel_dc_tc = block.tc_row
-                    if isinstance(israel_dc_tc, int): 
-                        ws.row_dimensions[israel_dc_tc].hidden = False
-                        ws.row_dimensions[israel_dc_tc].height = 20
+                    format_israel_tx_tc(ws, block.tx_row, is_tx=True)
+                    format_israel_tx_tc(ws, block.tc_row, is_tx=False)
+                    
+                    available_rows = list(block.rollout_country_rows.values())
+                    if country_row_rollout in available_rows: available_rows.remove(country_row_rollout)
+                    if len(available_rows) >= 2:
+                        style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
 
-        # ---------------- OCULTAR EXCEDENTES (PURGA RADICAL) ----------------
-        for r in range(1, 400):
+        # ---------------- FRANCOTIRADOR DE STATUS CONFORMING Y COMMENTS ----------------
+        sniper_limit: int = max_content_row + 15 if max_content_row > 0 else 400
+        for r in range(1, sniper_limit):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
-            val_d = get_val(ws, r, 4) 
             
-            # Aniquilar Branding y Total VOD
-            if any(x in val_a + val_b + val_c + val_d for x in ["watermark", "bug", "copyright", "endcard", "branding", "total vod"]):
+            # Matar filas de Status Conforming
+            if "status conforming" in val_a or "status conforming" in val_b:
                 ws.row_dimensions[r].hidden = True
-                for offset in range(1, 6):
-                    if r + offset <= ws.max_row and get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
-                        ws.row_dimensions[r+offset].hidden = True
-                    else: break
             
-            # Aniquilar filas de contadores
-            if val_b == "total" or val_c == "total":
+            # Matar filas de Comments
+            if val_c == "comments" or val_b == "comments":
                 ws.row_dimensions[r].hidden = True
 
-            # EL AIRE CORRECTO: Aumentamos la altura de la fila de la semana en lugar de desocultar la anterior
+            # Matar Branding
+            if val_b in ["watermark", "bug", "copyright", "endcard", "branding"]:
+                ws.row_dimensions[r].hidden = True
+
+            # Dar Aire a la semana (aumentando la altura)
             if val_b.startswith("week "):
                 ws.row_dimensions[r].height = 40 
+                ws.row_dimensions[r].hidden = False
 
-        # Ocultar todo debajo de la última semana
-        if last_processed_row > 0:
-            for r in range(last_processed_row + 5, 500): ws.row_dimensions[r].hidden = True
+        # ---------------- LA GUILLOTINA FINAL (Fila 273+) ----------------
+        if max_content_row > 0:
+            for r in range(max_content_row + 10, current_max_row + 50): 
+                ws.row_dimensions[r].hidden = True
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:

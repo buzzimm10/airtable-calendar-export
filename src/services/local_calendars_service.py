@@ -15,7 +15,7 @@ from config.countries_djr import DJR_SHEET_COUNTRIES as djr_master_countries
 from config.layouts_djr import DJR_WEEK_LAYOUT as djr_layout
 from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import PatternFill, Font, Alignment, Border
 
 def get_clean_country_name(name: str) -> str:
     return re.sub(r'\s*\(.*?\)', '', name).strip()
@@ -57,7 +57,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 15  
         
-        # MAGIA: Vaciamos absolutamente todos los "YES/NO" y datos viejos de esta fila
+        # Limpiar y pintar toda la fila (Borra los YES/NO viejos)
         for c in range(3, 34): 
             cell = sheet.cell(row=row_idx, column=c)
             if not isinstance(cell, MergedCell):
@@ -126,9 +126,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rollout_start = layout["country_rows"][0]
                 my_rollout_row = rollout_start + country_idx
                 
-                tc_r = layout.get("tc_row")
-                if isinstance(tc_r, int) and tc_r > max_content_row:
-                    max_content_row = tc_r
+                djr_tc = layout.get("tc_row")
+                if isinstance(djr_tc, int) and djr_tc > max_content_row:
+                    max_content_row = djr_tc
                 
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
@@ -147,7 +147,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     format_israel_tx_tc(ws, layout.get("tx_row"), is_tx=True)
                     format_israel_tx_tc(ws, layout.get("tc_row"), is_tx=False)
                     
-                    available_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if r != my_rollout_row]
+                    # Buscar filas FÍSICAMENTE DEBAJO de TC IN & OUT
+                    available_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if isinstance(djr_tc, int) and r > djr_tc and r != my_rollout_row]
+                    available_rows.sort()
                     if len(available_rows) >= 2:
                         style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
                         style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
@@ -180,44 +182,56 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     format_israel_tx_tc(ws, block.tx_row, is_tx=True)
                     format_israel_tx_tc(ws, block.tc_row, is_tx=False)
                     
-                    available_rows = list(block.rollout_country_rows.values())
-                    if country_row_rollout in available_rows: available_rows.remove(country_row_rollout)
+                    # Buscar filas FÍSICAMENTE DEBAJO de TC IN & OUT
+                    available_rows = [r for r in block.rollout_country_rows.values() if isinstance(dc_tc, int) and r > dc_tc and r != country_row_rollout]
+                    available_rows.sort()
                     if len(available_rows) >= 2:
                         style_recycled_row(ws, available_rows[0], "USED OR NOT", fill_grey)
                         style_recycled_row(ws, available_rows[1], "LINK YOUTUBE", fill_white)
 
-        # ---------------- LA PURGA RADICAL RESTAURADA ----------------
+        # ---------------- LA PURGA INVENCIBLE (LAS 11 FILAS) ----------------
+        in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
-        sniper_limit: int = max_content_row + 20 if max_content_row > 0 else 400
+        sniper_limit: int = max_content_row + 25 if max_content_row > 0 else 400
         
         for r in range(1, sniper_limit):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             val_d = get_val(ws, r, 4)
-            
             combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
             
-            # 1. Matar Branding, Status Conforming, Comments, Endcards
-            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments"]):
-                ws.row_dimensions[r].hidden = True
-                # Matar también las siguientes filas ocultas que pertenecen al mismo bloque
-                for offset in range(1, 6):
-                    if r + offset <= current_max_row and get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
-                        ws.row_dimensions[r+offset].hidden = True
-                    else: break
+            # Resetear la alarma cuando empieza una nueva semana
+            if val_b.startswith("week "):
+                in_junk_section = False
+            
+            # Activar alarma al detectar basura (Esto aniquila las 11 filas de Status Conforming seguidas)
+            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod"]):
+                in_junk_section = True
 
-            # 2. Matar Tiers
+            if in_junk_section:
+                ws.row_dimensions[r].hidden = True
+                
+            # Ocultar Tiers extra
             if val_b.startswith("tier ") or val_a.startswith("tier "):
                 ws.row_dimensions[r].hidden = True
 
-            # 3. Matar el resto de Países que NO fueron reciclados (Portugal, Norway, etc)
-            if any(c in val_a + val_b for c in country_names_lower) or val_b == "total" or val_c == "total":
+            # Ocultar países no usados
+            if any(c in val_a + val_b + val_c for c in country_names_lower) or val_b == "total" or val_c == "total":
                 ws.row_dimensions[r].hidden = True
 
-            # 4. Dar Aire a la semana (aumentando la altura)
-            if val_b.startswith("week "):
-                ws.row_dimensions[r].height = 40 
+        # ---------------- LA FILA BLANCA PERFECTA ENTRE SEMANAS ----------------
+        for r in range(5, 400):
+            if get_val(ws, r, 2).startswith("week "):
+                prev_r = r - 1
+                ws.row_dimensions[prev_r].hidden = False
+                ws.row_dimensions[prev_r].height = 15
+                for c in range(1, 35):
+                    cell = ws.cell(row=prev_r, column=c)
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None
+                        cell.fill = PatternFill(fill_type=None)
+                        cell.border = Border() # Borde invisible
 
         # ---------------- LA GUILLOTINA FINAL (Fila 273+) ----------------
         if max_content_row > 0:

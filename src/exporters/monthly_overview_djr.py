@@ -251,20 +251,26 @@ def auto_adjust_djr_overview_heights(ws):
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 42)
 
 
+import re
+
+def is_country_match(target_country: str, included_list: set) -> bool: # <-- Cambiado de List[str] a set
+    if not target_country: return True
+    target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
+    for c in included_list:
+        if target_clean == re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper():
+            return True
+    return False
+
 def populate_monthly_overview_djr(
     wb,
     records,
     enable_mediaplanning=True,
     channel_id_to_name_map=None,
-    target_country=None # <-- NUEVO PARÁMETRO
+    target_country=None 
 ):
-    if DJR_MONTHLY_OVERVIEW_SHEET not in wb.sheetnames:
-        logging.warning(f"Sheet '{DJR_MONTHLY_OVERVIEW_SHEET}' not found. Skipping DJR monthly overview.")
-        return
-
+    if DJR_MONTHLY_OVERVIEW_SHEET not in wb.sheetnames: return
     ws = wb[DJR_MONTHLY_OVERVIEW_SHEET]
 
-    # Limpiar tablero para calendario local
     if target_country:
         from openpyxl.styles import PatternFill
         for week_num, layout in DJR_OVERVIEW_WEEK_LAYOUT.items():
@@ -274,19 +280,13 @@ def populate_monthly_overview_djr(
                     c.value = None
                     c.fill = PatternFill(fill_type=None)
 
-    # Llamamos a TU función de header
     first_monday = write_djr_overview_header(ws, records) 
-    if not first_monday:
-        logging.warning("Could not determine first visible Monday for DJR monthly overview.")
-        return
+    if not first_monday: return
 
     for rec in records:
         fields = rec.get("fields", rec)
-
-        if asset_is_event(fields):
-            continue
+        if asset_is_event(fields): continue
             
-        # Filtro estricto para países locales (Case-Insensitive)
         if target_country:
             from core.countries import collect_included_countries
             included, _ = collect_included_countries(
@@ -296,34 +296,26 @@ def populate_monthly_overview_djr(
                 excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
                 channel_id_to_name_map=channel_id_to_name_map,
             )
-            included_upper = [c.upper() for c in included]
-            if target_country.upper() not in included_upper:
-                continue
+            # FILTRO INTELIGENTE
+            if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))
-        if owner == "Mediaplanning" and not enable_mediaplanning:
-            continue
+        if owner == "Mediaplanning" and not enable_mediaplanning: continue
 
         live_date = parse_date(fields.get(AT_FIELDS["live_date"]))
-        if not live_date:
-            continue
+        if not live_date: continue
 
         delta_days = (live_date - first_monday).days
-        if delta_days < 0:
-            continue
+        if delta_days < 0: continue
 
         week_index = (delta_days // 7) + 1
-        if week_index not in DJR_OVERVIEW_WEEK_LAYOUT:
-            continue
+        if week_index not in DJR_OVERVIEW_WEEK_LAYOUT: continue
 
         day_name = DAY_ORDER[live_date.weekday()]
         col = DJR_OVERVIEW_DAY_COLS[day_name]
-
         content_type = normalize_str(fields.get(AT_FIELDS["content_type"]))
         bucket = get_djr_overview_bucket(content_type)
-
-        if not bucket:
-            continue
+        if not bucket: continue
 
         layout = DJR_OVERVIEW_WEEK_LAYOUT[week_index]
 
@@ -334,8 +326,7 @@ def populate_monthly_overview_djr(
         if bucket == "podcast":
             row = layout["podcast_rows"][0]
             cell = get_writable_cell(ws, row, col)
-            if normalize_str(cell.value):
-                row = layout["podcast_rows"][1]
+            if normalize_str(cell.value): row = layout["podcast_rows"][1]
         else:
             row = layout[bucket]
 

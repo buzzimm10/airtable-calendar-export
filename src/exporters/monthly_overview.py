@@ -386,6 +386,16 @@ def write_overview_events(ws, records: List[Dict]):
         for event_row in layout["event_rows"]:
             auto_adjust_overview_row_height(ws, event_row, min_height=18, per_line=14)
 
+import re
+
+def is_country_match(target_country: str, included_list: set) -> bool: # <-- Cambiado de List[str] a set
+    if not target_country: return True
+    target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
+    for c in included_list:
+        if target_clean == re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper():
+            return True
+    return False
+
 def populate_monthly_overview(
     wb,
     records: List[Dict],
@@ -404,14 +414,12 @@ def populate_monthly_overview(
             event_rows_list = list(layout.get("event_rows", []))
             content_rows_list = list(range(layout["base_row"], layout["end_row"] + 1))
             
-            # Limpiamos contenido pero restauramos el fondo gris a los Eventos
             for row in event_rows_list:
                 for col in range(4, 11):
                     c = get_writable_cell(ws, row, col)
                     c.value = None
                     c.fill = fill_grey_80
             
-            # Limpiamos contenido y fondo del resto
             for row in content_rows_list:
                 for col in range(4, 11):
                     c = get_writable_cell(ws, row, col)
@@ -419,6 +427,7 @@ def populate_monthly_overview(
                     c.fill = PatternFill(fill_type=None)
 
     write_overview_headers(ws, records)
+    write_overview_events(ws, records)
 
     first_monday = first_visible_monday(records)
     if not first_monday: return
@@ -428,7 +437,7 @@ def populate_monthly_overview(
         fields = rec.get("fields", rec)
         if asset_is_event(fields): continue
 
-        # Filtro estricto para países locales (Case-Insensitive)
+        # FILTRO INTELIGENTE PARA PAÍSES (SOLUCIONA ISRAEL VACÍO)
         if target_country:
             included, _ = collect_included_countries(
                 youtube_channel=fields.get(AT_FIELDS["youtube_channel"]),
@@ -437,90 +446,63 @@ def populate_monthly_overview(
                 excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
                 channel_id_to_name_map=channel_id_to_name_map,
             )
-            included_upper = [c.upper() for c in included]
-            if target_country.upper() not in included_upper:
+            if not is_country_match(target_country, included):
                 continue
-            
-        if asset_is_event(fields):
-            continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))
-        if owner not in {"Programming", "Mediaplanning"}:
-            continue
-
-        if owner == "Mediaplanning" and not enable_mediaplanning:
-            continue
+        if owner not in {"Programming", "Mediaplanning"}: continue
+        if owner == "Mediaplanning" and not enable_mediaplanning: continue
 
         content_type = normalize_str(fields.get(AT_FIELDS["content_type"]))
         live_date = parse_date(fields.get(AT_FIELDS["live_date"]))
-        if not live_date:
-            continue
+        if not live_date: continue
 
         pos = overview_visual_position(live_date, first_monday)
-        if not pos:
-            continue
+        if not pos: continue
 
         visual_week, day_name = pos
-        if visual_week not in OVERVIEW_WEEK_LAYOUT:
-            continue
-
+        if visual_week not in OVERVIEW_WEEK_LAYOUT: continue
         used_weeks.add(visual_week)
 
         row_offset = overview_row_offset(content_type, fields.get(AT_FIELDS["priority"]))
-        if row_offset is None:
-            continue
+        if row_offset is None: continue
 
         base_row = OVERVIEW_WEEK_LAYOUT[visual_week]["base_row"]
         target_row = base_row + row_offset
         target_col = OVERVIEW_DAY_COLS[day_name]
 
         if content_type == "Vertical Short":
-            write_vertical_short_cell(ws, target_row, target_col, fields)
+            # PASAMOS TARGET_COUNTRY PARA OCULTAR TIERS
+            write_vertical_short_cell(ws, target_row, target_col, fields, target_country=target_country)
             auto_adjust_overview_row_height(ws, target_row, min_height=26, per_line=16)
             auto_adjust_overview_row_height(ws, target_row + 1, min_height=22, per_line=16)
         else:
-            line1, line2, geofenced = build_overview_lines(fields, channel_id_to_name_map=channel_id_to_name_map, target_country=target_country) # PASAMOS EL PAÍS
+            line1, line2, geofenced = build_overview_lines(fields, channel_id_to_name_map=channel_id_to_name_map, target_country=target_country)
             write_overview_cell(ws, target_row, target_col, line1, line2, content_type, geofenced)
             auto_adjust_overview_row_height(ws, target_row)
 
-    # If week 5 unused, clear it
-    if 5 not in used_weeks:
-        clear_overview_week(ws, 5)
+    if 5 not in used_weeks: clear_overview_week(ws, 5)
 
-    # --- NEW: Out-of-month Reverse Diagonal Stripe Pattern ---
-    # 1. Determinar cuál es el mes principal ("Target Month")
     valid_dates = [parse_date(r.get("fields", r).get(AT_FIELDS["live_date"])) for r in records]
     valid_dates = [d for d in valid_dates if d]
     
     if valid_dates and first_monday:
         target_month = Counter(d.month for d in valid_dates).most_common(1)[0][0]
-
-        # En openpyxl: lightDown = Reverse Diagonal. 
-        # fgColor = color del patrón (Líneas negras). bgColor = color de fondo (Gris D9D9D9).
         out_of_month_fill = PatternFill(fill_type="lightDown", fgColor="FF000000", bgColor="FFD9D9D9")
         days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
         for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
             base_row = layout["base_row"]
             end_row = layout["end_row"]
-
             for day_idx, day_name in enumerate(days_list):
                 col = OVERVIEW_DAY_COLS.get(day_name)
-                if not col:
-                    continue
-
-                # Calcular la fecha exacta de esta columna en el layout
+                if not col: continue
                 current_date = first_monday + timedelta(days=(week_num - 1) * 7 + day_idx)
-
-                # Si el día no pertenece al mes principal, aplicamos el patrón a las filas de contenido vacías
                 if current_date.month != target_month:
                     for row in range(base_row, end_row + 1):
                         cell = get_writable_cell(ws, row, col)
-                        # Si la celda está vacía, aplicamos el patrón gris sin importar el formato de la plantilla
-                        if not cell.value:
-                            cell.fill = out_of_month_fill
+                        if not cell.value: cell.fill = out_of_month_fill
 
-    # Event row height approximation
     for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
         for event_row in layout["event_rows"]:
             auto_adjust_overview_row_height(ws, event_row, min_height=24, per_line=14)

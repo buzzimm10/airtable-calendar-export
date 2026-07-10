@@ -184,33 +184,33 @@ def write_djr_overview_regular_cell(ws, row, col, text, bucket):
 
 def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_row, bottom_row = layout["vertical_rows"]
-
     top_cell = get_writable_cell(ws, top_row, col)
     bottom_cell = get_writable_cell(ws, bottom_row, col)
 
     top_text = build_djr_overview_text(record, target_country=target_country)
     bottom_text = get_djr_overview_region_text(record)
 
+    # Solo llamamos a la función local, sin importarla
     append_to_cell(top_cell, top_text)
 
     fill = PatternFill(fill_type="solid", fgColor=DJR_OVERVIEW_FILL_COLORS["vertical"])
-
     top_cell.fill = fill
     bottom_cell.fill = fill
 
     top_cell.font = Font(bold=True, color="FF000000")
     top_cell.alignment = center_wrap()
-    bottom_cell.alignment = center_wrap()
 
-    # MAGIA: Si NO es un país local, escribimos la fila de Tiers
-    if not target_country:
-        bottom_cell.value = bottom_text
-        if bottom_text == "SPAIN ONLY":
-            bottom_cell.font = Font(bold=True, color="FFFFFF00")
-        else:
-            bottom_cell.font = Font(bold=True, color="FFFF0000")
+    # MAGIA: Merge vertical si es calendario local
+    if target_country:
+        bottom_cell.value = None
+        try:
+            ws.merge_cells(start_row=top_row, start_column=col, end_row=bottom_row, end_column=col)
+        except Exception: pass
     else:
-        bottom_cell.value = ""
+        bottom_cell.value = bottom_text
+        bottom_cell.alignment = center_wrap()
+        if bottom_text == "SPAIN ONLY": bottom_cell.font = Font(bold=True, color="FFFFFF00")
+        else: bottom_cell.font = Font(bold=True, color="FFFF0000")
 
 def write_djr_overview_header(ws, records):
     month_name = month_name_from_records(records)

@@ -211,18 +211,22 @@ def write_vertical_short_cell(ws, top_row: int, col: int, record: Dict, target_c
     top_cell.value = top_text
     top_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     top_cell.font = Font(bold=True, color="FF000000")
-    top_cell.fill = PatternFill(fill_type="solid", fgColor=OVERVIEW_FILL_COLORS["Vertical Short"])
+    
+    fill_color = PatternFill(fill_type="solid", fgColor=OVERVIEW_FILL_COLORS["Vertical Short"])
+    top_cell.fill = fill_color
+    bottom_cell.fill = fill_color
 
-    # MAGIA: Si es un país local, NO escribimos los Tiers
+    # MAGIA: Merge vertical si es calendario local
     if target_country:
-        bottom_cell.value = ""
+        bottom_cell.value = None
+        try:
+            ws.merge_cells(start_row=top_row, start_column=col, end_row=top_row + 1, end_column=col)
+        except Exception: pass
     else:
         bottom_cell.value = tier_text
-
-    bottom_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    if tier_text == "SPAIN ONLY": bottom_cell.font = Font(bold=True, color="FFFFFF00")
-    else: bottom_cell.font = Font(bold=True, color="FFFF0000")
-    bottom_cell.fill = PatternFill(fill_type="solid", fgColor=OVERVIEW_FILL_COLORS["Vertical Short"])
+        bottom_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        if tier_text == "SPAIN ONLY": bottom_cell.font = Font(bold=True, color="FFFFFF00")
+        else: bottom_cell.font = Font(bold=True, color="FFFF0000")
 
 def auto_adjust_overview_row_height(ws, row: int, min_height: float = 24, per_line: float = 16, chars_per_line: int = 22):
     """

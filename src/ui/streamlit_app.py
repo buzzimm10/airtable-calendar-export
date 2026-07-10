@@ -104,24 +104,20 @@ with st.sidebar:
     st.divider()
 
     # ---> MEJORADO: Checkbox condicional y optimizado para la Fase 2 <---
-    st.markdown("### 🌍 Calendarios Locales (Fase 2)")
-    export_individual = st.checkbox(
-        "📦 Exportar calendarios individuales por país", 
-        value=False, 
-        help="Activa esta opción si necesitas generar los archivos limpios e independientes por cada mercado."
-    )
+    st.divider()
 
-    selected_countries = None
+    st.markdown("### 📥 Opciones de Exportación")
+    export_master = st.checkbox("📥 Exportar Master Calendar (General)", value=True)
+    export_individual = st.checkbox("📦 Exportar calendarios individuales por país (Fase 2)", value=False)
+
+    selected_countries = []
     if export_individual:
-        # Si el checkbox está activo, cargamos y mostramos la lista de selección
         country_options = dc_countries if channel == "Disney Channel" else djr_countries
         country_options = [c for c in country_options if c.lower() not in ["spain", "españa"]]
-        
         selected_countries = st.multiselect(
             "Selecciona para qué países generar calendarios:",
             options=country_options,
-            default=country_options,
-            help="Los archivos se guardarán automáticamente en la carpeta 'country_calendars'."
+            default=country_options
         )
     else:
         # Si el checkbox está apagado, pasamos una lista vacía para indicarle 
@@ -366,32 +362,26 @@ else:
         
         if st.session_state.get("export_success", False):
             with btn_col2:
-                # Recuperamos los valores y aseguramos que son strings para calmar a Pylance
                 master_path = st.session_state.get("output_path")
                 master_filename = st.session_state.get("output_filename")
                 zip_path = st.session_state.get("zip_path")
                 
-                # 1. Botón Master (Solo se muestra si la ruta es un string válido)
-                if master_path and isinstance(master_path, str) and master_filename and isinstance(master_filename, str):
+                # Botón Master (Solo si el checkbox estaba activo)
+                if export_master and master_path and isinstance(master_path, str) and master_filename:
                     with open(master_path, "rb") as file:
                         st.download_button(
                             label="⬇️ Descargar Master Calendar",
-                            data=file,
-                            file_name=master_filename,
+                            data=file, file_name=master_filename,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            type="secondary",
-                            use_container_width=True
+                            type="secondary", use_container_width=True
                         )
                 
-                # 2. Botón ZIP de Países Locales (Solo se muestra si la ruta es un string válido)
-                if zip_path and isinstance(zip_path, str):
+                # Botón ZIP Locales (Solo si el checkbox estaba activo y hay países)
+                if export_individual and zip_path and isinstance(zip_path, str):
                     with open(zip_path, "rb") as zfile:
                         st.download_button(
                             label="📦 Descargar Calendarios Locales (ZIP)",
-                            data=zfile,
-                            file_name=os.path.basename(zip_path),
-                            mime="application/zip",
-                            type="primary",
-                            use_container_width=True
+                            data=zfile, file_name=os.path.basename(zip_path),
+                            mime="application/zip", type="primary", use_container_width=True
                         )
             st.success("✅ ¡Reporte listo! Selecciona tu descarga arriba.")

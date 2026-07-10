@@ -1,6 +1,7 @@
 import os
 import logging
 import zipfile
+import re
 from typing import List, Optional
 from openpyxl import load_workbook
 from datetime import datetime
@@ -16,6 +17,10 @@ from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
 from openpyxl.styles import PatternFill, Font, Alignment
 
+def get_clean_country_name(name: str) -> str:
+    """Elimina el idioma entre paréntesis, ej: 'Israel (Hebrew)' -> 'Israel'"""
+    return re.sub(r'\s*\(.*?\)', '', name).strip()
+
 def generate_local_calendars(master_path: str, output_dir: str, channel_type: str, 
                              selected_countries: Optional[List[str]] = None,
                              month_str: str = "2026-05", 
@@ -23,7 +28,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                              records: Optional[list] = None, 
                              channel_id_to_name_map: Optional[dict] = None):
     
-    if not os.path.exists(master_path): return None
+    if not os.path.exists(master_path) or not selected_countries: return None
 
     os.makedirs(output_dir, exist_ok=True)
     for f in os.listdir(output_dir):
@@ -32,7 +37,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     is_djr = channel_type.upper() == "DJR"
     sheet_name = djr_sheet_name if is_djr else dc_sheet_name
     master_countries = djr_master_countries if is_djr else dc_master_countries
-    countries_to_process = selected_countries if selected_countries is not None else master_countries
     
     try:
         dt = datetime.strptime(month_str, "%Y-%m")
@@ -71,19 +75,29 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         v = sheet.cell(row=r, column=c).value
         return str(v).strip().lower() if v is not None else ""
 
-    for country in countries_to_process:
+    for country in selected_countries:
         if country.lower() in ["spain", "españa"]: continue
         country_wb = load_workbook(master_path, data_only=False)
+        clean_country = get_clean_country_name(country)
         
         for sn in country_wb.sheetnames:
             if "compilation" in sn.lower(): del country_wb[sn]
+            
         if sheet_name not in country_wb.sheetnames:
             country_wb.close()
             continue
             
         ws = country_wb[sheet_name]
-        is_israel = country.lower() == "israel"
+        is_israel = clean_country.lower() == "israel"
         last_processed_row = 0
+
+        # Ocultar columna AG (Total VOD)
+        ws.column_dimensions['AG'].hidden = True
+
+        for r in range(1, 400):
+            if get_val(ws, r, 2).startswith("week "):
+                ws.row_dimensions[r - 1].hidden = False
+                ws.row_dimensions[r - 1].height = 25
 
         # ---------------- LÓGICA DISNEY JUNIOR ----------------
         if is_djr:
@@ -94,12 +108,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rollout_start = layout["country_rows"][0]
                 my_rollout_row = rollout_start + country_idx
                 
-                for i in range(len(master_countries)):
-                    ws.row_dimensions[rollout_start + i].hidden = True
-                if "status_rows" in layout:
-                    for i in range(len(master_countries)):
-                        ws.row_dimensions[layout["status_rows"][0] + i].hidden = True
-
                 tc_r = layout.get("tc_row", 0)
                 if tc_r > last_processed_row: last_processed_row = tc_r
                 
@@ -117,11 +125,15 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     style_recycled_row(ws, layout.get("tx_row"), "USED OR NOT", fill_grey)
                     style_recycled_row(ws, layout.get("tc_row"), "LINK YOUTUBE", fill_white)
                 else:
-                    # FORZAR A ISRAEL A MOSTRAR LAS FILAS (Unhide)
-                    tx_r = layout.get("tx_row")
-                    tc_r = layout.get("tc_row")
-                    if tx_r is not None: ws.row_dimensions[tx_r].hidden = False
-                    if tc_r is not None: ws.row_dimensions[tc_r].hidden = False
+                    # FIX TYPING PYLANCE
+                    israel_tx = layout.get("tx_row")
+                    if israel_tx: 
+                        ws.row_dimensions[israel_tx].hidden = False
+                        ws.row_dimensions[israel_tx].height = 20
+                    israel_tc = layout.get("tc_row")
+                    if israel_tc: 
+                        ws.row_dimensions[israel_tc].hidden = False
+                        ws.row_dimensions[israel_tc].height = 20
 
         # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
@@ -131,9 +143,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 country_row_rollout = block.rollout_country_rows.get(target_key) if target_key else None
                 
                 if block.end_row > last_processed_row: last_processed_row = block.end_row
-
-                for r in block.rollout_country_rows.values(): ws.row_dimensions[r].hidden = True
-                for r in block.status_country_rows.values(): ws.row_dimensions[r].hidden = True
                 
                 if country_row_rollout:
                     for col in range(4, 34): 
@@ -149,9 +158,15 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     style_recycled_row(ws, block.tx_row, "USED OR NOT", fill_grey)
                     style_recycled_row(ws, block.tc_row, "LINK YOUTUBE", fill_white)
                 else:
-                    # FORZAR A ISRAEL A MOSTRAR LAS FILAS (Unhide)
-                    if block.tx_row: ws.row_dimensions[block.tx_row].hidden = False
-                    if block.tc_row: ws.row_dimensions[block.tc_row].hidden = False
+                    # FIX TYPING PYLANCE
+                    israel_dc_tx = block.tx_row
+                    if israel_dc_tx: 
+                        ws.row_dimensions[israel_dc_tx].hidden = False
+                        ws.row_dimensions[israel_dc_tx].height = 20
+                    israel_dc_tc = block.tc_row
+                    if israel_dc_tc: 
+                        ws.row_dimensions[israel_dc_tc].hidden = False
+                        ws.row_dimensions[israel_dc_tc].height = 20
 
         # ---------------- OCULTAR EXCEDENTES (PURGA RADICAL) ----------------
         country_names_lower = [c.lower() for c in master_countries]
@@ -160,25 +175,39 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
+            val_d = get_val(ws, r, 4) 
             
-            # Buscar Comments en A, B o C aniquilará la fila roja de Status Conforming
-            if any(x in val_a for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
-               any(x in val_b for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments"]) or \
-               any(x in val_c for x in ["comments"]):
+            if any(x in val_a + val_b + val_c + val_d for x in ["watermark", "bug", "copyright", "endcard", "branding", "comments", "total vod", "status conforming"]):
                 ws.row_dimensions[r].hidden = True
                 for offset in range(1, 8):
                     if r + offset <= ws.max_row and get_val(ws, r+offset, 1) == "" and get_val(ws, r+offset, 2) == "":
                         ws.row_dimensions[r+offset].hidden = True
                     else: break
             
-            if "status conforming" in val_a or "status conforming" in val_b or \
-               val_b == "total" or val_c == "total" or \
-               val_b in country_names_lower or val_a in country_names_lower:
+            if any(c in val_a + val_b for c in country_names_lower) or val_b == "total" or val_c == "total":
                 ws.row_dimensions[r].hidden = True
 
         if last_processed_row > 0:
             for r in range(last_processed_row + 5, 500): ws.row_dimensions[r].hidden = True
 
+        # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY (FIX PYLANCE MERGEDCELL) ---
+        for sn in country_wb.sheetnames:
+            ws_tmp = country_wb[sn]
+            for r in range(1, 15):
+                for c in range(1, 10):
+                    c_obj = ws_tmp.cell(row=r, column=c)
+                    # Solo reemplazamos si es una celda real, esquivando las combinadas
+                    if not isinstance(c_obj, MergedCell):
+                        v = c_obj.value
+                        if isinstance(v, str) and "EMEA" in v:
+                            c_obj.value = v.replace("EMEA", clean_country.upper())
+        
+        for sn in country_wb.sheetnames:
+            if "EMEA" in sn:
+                new_title = sn.replace("EMEA", clean_country.upper())
+                country_wb[sn].title = new_title[:31] 
+
+        # --- GENERAR OVERVIEW LOCAL ---
         if records:
             if is_djr:
                 from exporters.monthly_overview_djr import populate_monthly_overview_djr
@@ -187,8 +216,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 from exporters.monthly_overview import populate_monthly_overview
                 populate_monthly_overview(country_wb, records=records, enable_mediaplanning=True, channel_id_to_name_map=channel_id_to_name_map, target_country=country)
 
-        clean_country = country.replace("/", "_").replace(" ", "_")
-        filename = f"{month_num}_Social Media Calendar {brand_label} YouTube EMEA - {month_name_year} - {clean_country}.xlsx"
+        filename = f"{month_num}_Social Media Calendar {brand_label} YouTube {clean_country} - {month_name_year}.xlsx"
         output_path = os.path.join(output_dir, filename)
         country_wb.template = False
         country_wb.save(output_path)

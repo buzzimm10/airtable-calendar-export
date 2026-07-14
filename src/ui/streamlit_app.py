@@ -21,8 +21,26 @@ from config.styles import OVERVIEW_FILL_COLORS
 from config.content_types import MONTHLY_OVERVIEW_MAPPING
 from populate_calendar import populate_calendar
 
-# --- PAGE CONFIG ---
-# ... tu código sigue normal a partir de aquí ...
+def check_password():
+    """Devuelve True si el usuario ingresó la contraseña correcta."""
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
+
+    if st.session_state.password_correct:
+        return True
+
+    st.markdown("## 🔐 Sistema de Calendarios YouTube EMEA")
+    password = st.text_input("Ingresa la contraseña del equipo:", type="password")
+    if st.button("Entrar"):
+        if password == "DisneyEmea2026": # <-- Cambia esta clave por la que quieras
+            st.session_state.password_correct = True
+            st.rerun()
+        else:
+            st.error("❌ Contraseña incorrecta")
+    return False
+
+if not check_password():
+    st.stop()  # Detiene la app aquí si no han puesto la clave
 
 # --- PAGE CONFIG ---
 st.set_page_config(

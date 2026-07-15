@@ -189,22 +189,27 @@ def write_djr_asset_to_col(ws, layout, col, record):
     safe_set_value(ws, layout["strategy_row"], col, single["strategy"], alignment=center_wrap())
     safe_set_value(ws, layout["tx_row"], col, single["tx"], alignment=center_wrap())
     safe_set_value(ws, layout["tc_row"], col, single["tc"], alignment=center_wrap())
-    safe_set_value(ws, layout["tx_row"], col, single["tx"], alignment=center_wrap())
-    safe_set_value(ws, layout["tc_row"], col, single["tc"], alignment=center_wrap())
 
     write_djr_branding(ws, layout, col, record)
 
     role = hub_role(record.get(AT_FIELDS["owner_hub"]))
     comments_row = layout["comments_rows"].get(role)
     if comments_row:
-        # APLICAMOS EL PARSEADOR AL COMENTARIO AQUÍ:
-        safe_set_value(
-            ws, 
-            comments_row, 
-            col, 
-            markdown_to_richtext(single["comments"]), 
-            alignment=center_wrap()
-        )
+        # --- INYECTOR DE NOTAS DE DERECHOS (NEW) ---
+        fields = record.get("fields", record)
+        policy = fields.get("Rights Management Policy")
+        policy_str = str(policy).strip() if policy else ""
+        extra_note = ""
+        
+        if "Block AUS/NZ" in policy_str:
+            extra_note = "\n\n⚠️ **Rights Policy:** Block AUS/NZ/TAIWAN/CHINA/HONG KONG - Monetize everywhere else"
+        elif "Monetize Locally" in policy_str:
+            extra_note = "\n\n⚠️ **Rights Policy:** Monetize Locally (Geo-block)"
+        elif "Block Everywhere" in policy_str:
+            extra_note = "\n\n🚫 **Rights Policy:** Block Everywhere / Do Not Monetize"
+            
+        comments_text = single["comments"] + extra_note
+        safe_set_value(ws, comments_row, col, markdown_to_richtext(comments_text), alignment=center_wrap())
 
 
 def write_djr_deadline(ws, layout, day_name, records):

@@ -132,7 +132,12 @@ def build_overview_lines(record: Dict, channel_id_to_name_map: Optional[Dict[str
     elif content_type == "Compilation": activity = f"COMP {activity}"
     elif content_type == "Live Stream": activity = f"LIVE {activity}"
 
-    geofenced = lower_clean(record.get(AT_FIELDS["geofenced"])) == "yes"
+    # --- NUEVA LÓGICA DE DERECHOS PARA MORADO VISUAL (NEW) ---
+    fields = record.get("fields", record)
+    policy_val = fields.get("Rights Management Policy")
+    policy_str = str(policy_val).strip() if policy_val else ""
+    geofenced = any(x in policy_str for x in ["Block AUS/NZ", "Monetize Locally", "Block Everywhere"])
+
     included_countries, _ = collect_included_countries(
         youtube_channel=record.get(AT_FIELDS["youtube_channel"]),
         region=record.get(AT_FIELDS["region"]),
@@ -144,11 +149,13 @@ def build_overview_lines(record: Dict, channel_id_to_name_map: Optional[Dict[str
     line2 = normalize_overview_region(record.get(AT_FIELDS["region"]))
     except_suffix = format_except_suffix(record.get(AT_FIELDS["region"]), included_countries)
 
-    # MAGIA: Si es un calendario local, borramos la línea 2 (Tiers)
     if target_country:
         line2 = ""
     else:
         line2 = f"{line2}{except_suffix}" if line2 else except_suffix.strip()
+        # Si no es un calendario individual, añadimos la alerta visual compacta en la línea 2
+        if "Block AUS/NZ" in policy_str: line2 = f"{line2} [BLOCK AUS/NZ/CHI]".strip()
+        elif "Block Everywhere" in policy_str: line2 = f"{line2} [DO NOT MONETIZE]".strip()
 
     return activity, line2, geofenced
 

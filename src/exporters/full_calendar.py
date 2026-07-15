@@ -122,7 +122,22 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.strategy_row, col, single["strategy"])
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
-            _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
+            
+            # --- INYECTOR DE NOTAS DE DERECHOS (NEW) ---
+            fields = record.get("fields", record)
+            policy = fields.get("Rights Management Policy")
+            policy_str = str(policy).strip() if policy else ""
+            extra_note = ""
+            
+            if "Block AUS/NZ" in policy_str:
+                extra_note = "\n\n⚠️ **Rights Policy:** Block AUS/NZ/TAIWAN/CHINA/HONG KONG - Monetize everywhere else"
+            elif "Monetize Locally" in policy_str:
+                extra_note = "\n\n⚠️ **Rights Policy:** Monetize Locally (Geo-block)"
+            elif "Block Everywhere" in policy_str:
+                extra_note = "\n\n🚫 **Rights Policy:** Block Everywhere / Do Not Monetize"
+                
+            comments_text = single["comments"] + extra_note
+            _write(block.comments_row, col, markdown_to_richtext(comments_text))
 
             if branding_layout_dict:
                 write_dc_branding(ws, branding_layout_dict, col, record)
@@ -134,7 +149,6 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
 
         num_records = len(records[:2])
         
-        # SOLO cambiamos el texto de YT TEAM UK a MEDIAPLANNING si hay 2 contenidos
         if num_records > 1 and len(target_cols) == 2 and block.owner_row:
             safe_set_value(ws, block.owner_row, target_cols[1], "MEDIAPLANNING HUB", alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
@@ -146,7 +160,6 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.content_type_row, col, single["content_type"])
             _write(block.property_row, col, single["property"])
             
-            # MERGE VERTICAL: Juntamos Title, Synopsis y Strategy hacia abajo
             text_to_merge = single["title"]
             if single["synopsis"]: text_to_merge += f"\n\n{single['synopsis']}"
             if single["strategy"]: text_to_merge += f"\n\n{single['strategy']}"
@@ -157,16 +170,29 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
 
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
-            _write(block.comments_row, col, markdown_to_richtext(single["comments"]))
+            
+            # --- INYECTOR DE NOTAS DE DERECHOS (NEW) ---
+            fields = record.get("fields", record)
+            policy = fields.get("Rights Management Policy")
+            policy_str = str(policy).strip() if policy else ""
+            extra_note = ""
+            
+            if "Block AUS/NZ" in policy_str:
+                extra_note = "\n\n⚠️ **Rights Policy:** Block AUS/NZ/TAIWAN/CHINA/HONG KONG - Monetize everywhere else"
+            elif "Monetize Locally" in policy_str:
+                extra_note = "\n\n⚠️ **Rights Policy:** Monetize Locally (Geo-block)"
+            elif "Block Everywhere" in policy_str:
+                extra_note = "\n\n🚫 **Rights Policy:** Block Everywhere / Do Not Monetize"
+                
+            comments_text = single["comments"] + extra_note
+            _write(block.comments_row, col, markdown_to_richtext(comments_text))
 
             if branding_layout_dict: write_dc_branding(ws, branding_layout_dict, col, record)
 
-            # Efectuamos el Merge Vertical explícito en LA MISMA COLUMNA
             if block.title_row and block.strategy_row:
                 try:
                     ws.merge_cells(start_row=block.title_row, start_column=col, end_row=block.strategy_row, end_column=col)
-                except Exception:
-                    pass
+                except Exception: pass
                 cell = ws.cell(row=block.title_row, column=col)
                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                 

@@ -107,43 +107,50 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
-    # MAGIA: Si es un calendario local, NO incluimos el texto de región/Tiers
     region = "" if target_country else get_djr_overview_region_text(record)
-    geofenced = lower_clean(record.get(AT_FIELDS["geofenced"])) == "yes"
+    
+    # --- EVALUACIÓN DE POLÍTICA DE DERECHOS (NEW) ---
+    fields = record.get("fields", record)
+    policy_val = fields.get("Rights Management Policy")
+    policy_str = str(policy_val).strip() if policy_val else ""
+    
+    gf_suffix = ""
+    if "Block AUS/NZ" in policy_str: gf_suffix = " [BLOCK AUS/NZ]"
+    elif "Monetize Locally" in policy_str: gf_suffix = " GF"
+    elif "Block Everywhere" in policy_str: gf_suffix = " [🚫 NO MONETIZE]"
 
     ep = get_episode_number(record)
-    gf = " GF" if geofenced else ""
 
     if content_type == "Full Episode":
         ep_text = f" ep. {ep}" if ep else ""
         line1 = f"{prop}{ep_text} {title}".strip()
         line2 = get_episode_category(record)
-        return f"{line1}{gf}\n{line2}\n{region}".strip()
+        return f"{line1}{gf_suffix}\n{line2}\n{region}".strip()
 
     if content_type in {"Exclusive", "Editorial Short"}:
         ep_text = f" ep. {ep}" if ep else ""
-        return f"{prop} Short{ep_text}\n{region}".strip()
+        return f"{prop} Short{ep_text}\n{region}{gf_suffix}".strip()
 
     if content_type in {"Lift", "Musical Lift", "Magical Moment"}:
         label = "Magical Moment" if content_type == "Magical Moment" else content_type
-        return f"{label} {prop}".strip()
+        return f"{label} {prop}{gf_suffix}".strip()
 
     if content_type == "Compilation":
         prefix = "MEGA Compilation" if "mega" in activity.lower() or "mega" in title.lower() else "Compilation"
-        return f"{prefix} {prop}\n{region}".strip()
+        return f"{prefix} {prop}\n{region}{gf_suffix}".strip()
 
     if content_type == "Live Stream":
         if "full" in title.lower() or "episode" in title.lower():
-            return f"{prop} Compilation Full Eps\n{region}{gf}".strip()
-        return f"MEGA {prop}\n{region}{gf}".strip()
+            return f"{prop} Compilation Full Eps\n{region}{gf_suffix}".strip()
+        return f"MEGA {prop}\n{region}{gf_suffix}".strip()
 
     if content_type == "Podcast":
-        return f"{prop} Podcast\n{region}".strip()
+        return f"{prop} Podcast\n{region}{gf_suffix}".strip()
 
     if content_type == "Vertical Short":
         return prop
 
-    return f"{prop}\n{region}".strip()
+    return f"{prop}\n{region}{gf_suffix}".strip()
 
 def get_djr_overview_bucket(content_type):
     if content_type == "Full Episode":

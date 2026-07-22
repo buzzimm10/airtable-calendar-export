@@ -175,9 +175,10 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             # --- NUEVO: BURNED-IN TEXT (SPAIN ONLY) ---
             if hasattr(block, 'burned_in_text_row') and block.burned_in_text_row:
                 burned_in = ""
-                # Solo aplica si es Vertical Short
-                if single["content_type"] == "Vertical Short":
+                # Solo aplica si es Vertical Short (ignorando mayúsculas/minúsculas)
+                if single["content_type"].lower() == "vertical short":
                     fields = record.get("fields", record)
+                    # Usamos la llave directa de Airtable
                     burned_in = str(fields.get("Burned-in Text (Spain Only)", "")).strip()
                 _write(block.burned_in_text_row, col, burned_in)
             
@@ -512,7 +513,7 @@ def find_week_blocks(ws_write, anchor_dates: Dict[str, date]) -> Dict[date, Week
             elif a1 == "tc in & out" and block.tc_row is None:
                 block.tc_row = r
             # --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
-            elif "burned-in text" in a1 and block.burned_in_text_row is None:
+            elif "burned" in a1 and "text" in a1 and block.burned_in_text_row is None:
                 block.burned_in_text_row = r
             # -----------------------------------
             elif a1 == "comments" and block.comments_row is None:
@@ -541,7 +542,7 @@ def find_week_blocks(ws_write, anchor_dates: Dict[str, date]) -> Dict[date, Week
             "strategy_row": "planning strategy",
             "tx_row": "tx id",
             "tc_row": "tc in & out",
-            "burned_in_text_row": "burned-in text",
+            "burned_in_text_row": "burned",
             "comments_row": "comments",
             "deadline_row": "deadline",
         }

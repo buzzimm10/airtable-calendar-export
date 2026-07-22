@@ -43,9 +43,11 @@ class WeekBlock:
         self.strategy_row: Optional[int] = None
         self.tx_row: Optional[int] = None
         self.tc_row: Optional[int] = None
+        self.burned_in_text_row: Optional[int] = None
         self.comments_row: Optional[int] = None
         self.rollout_country_rows: Dict[str, int] = {}
         self.status_country_rows: Dict[str, int] = {}
+
 
 def hub_role(owner_hub: Optional[str]) -> Optional[str]:
     h = lower_clean(owner_hub or "")

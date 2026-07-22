@@ -29,6 +29,7 @@ from services.planner_service import (
     assemble_text_for_single_asset,
 )
 
+
 def rebuild_full_calendar_week_merges(ws, block: WeekBlock):
     """
     Rebuild merges for:
@@ -171,6 +172,15 @@ def write_to_day_role_columns(ws, block, day_name, role, records, enable_mediapl
             _write(block.tx_row, col, single["tx"])
             _write(block.tc_row, col, single["tc"])
             
+            # --- NUEVO: BURNED-IN TEXT (SPAIN ONLY) ---
+            if hasattr(block, 'burned_in_text_row') and block.burned_in_text_row:
+                burned_in = ""
+                # Solo aplica si es Vertical Short
+                if single["content_type"] == "Vertical Short":
+                    fields = record.get("fields", record)
+                    burned_in = str(fields.get("Burned-in Text (Spain Only)", "")).strip()
+                _write(block.burned_in_text_row, col, burned_in)
+            
             # --- INYECTOR DE NOTAS DE DERECHOS (NEW) ---
             fields = record.get("fields", record)
             policy = fields.get("Rights Management Policy")
@@ -293,6 +303,7 @@ def auto_adjust_full_calendar_row_heights(ws, blocks):
             block.strategy_row: 36,
             block.tx_row: 30,
             block.tc_row: 36,
+            block.burned_in_text_row: 30,
             block.comments_row: 48,
         }
 
@@ -500,6 +511,12 @@ def find_week_blocks(ws_write, anchor_dates: Dict[str, date]) -> Dict[date, Week
                 block.tx_row = r
             elif a1 == "tc in & out" and block.tc_row is None:
                 block.tc_row = r
+            # --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
+            elif "burned-in text" in a1 and block.burned_in_text_row is None:
+                block.burned_in_text_row = r
+            # -----------------------------------
+            elif a1 == "comments" and block.comments_row is None:
+                block.comments_row = r
             elif a1 == "comments" and block.comments_row is None:
                 block.comments_row = r
             elif a1 == "deadline" and block.deadline_row is None:
@@ -524,6 +541,7 @@ def find_week_blocks(ws_write, anchor_dates: Dict[str, date]) -> Dict[date, Week
             "strategy_row": "planning strategy",
             "tx_row": "tx id",
             "tc_row": "tc in & out",
+            "burned_in_text_row": "burned-in text",
             "comments_row": "comments",
             "deadline_row": "deadline",
         }

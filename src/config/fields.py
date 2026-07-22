@@ -28,4 +28,5 @@ AT_FIELDS = {
     "branding_bug": "Bug",
     "branding_copyright": "Copyright",
     "branding_endcard": "Endcard",
+    "burned_in_text": "Burned-in Text (Spain Only)",
 }

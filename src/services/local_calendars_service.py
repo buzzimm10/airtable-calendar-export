@@ -190,7 +190,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     for col in range(4, 34): 
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
                         if "YES" not in cell_val:
-                            rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row, block.tx_row, block.tc_row, block.comments_row]
+                            rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row, block.tx_row, block.tc_row, getattr(block, 'burned_in_text_row', None), block.comments_row]
+                            # Limpiar de la lista los None por si acaso
+                            rows_to_clear = [r for r in rows_to_clear if r is not None]
                             for r in rows_to_clear: clear_cell(ws, r, col)
                         elif not is_israel:
                             clear_cell(ws, block.tx_row, col)

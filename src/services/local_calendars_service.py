@@ -6,6 +6,7 @@ from typing import List, Optional, Set
 from openpyxl import load_workbook
 from datetime import datetime
 from openpyxl.cell.cell import MergedCell
+from openpyxl.styles import PatternFill, Font, Alignment, Border
 
 from config.layouts import TARGET_SHEET as dc_sheet_name
 from config.countries import SHEET_COUNTRIES as dc_master_countries
@@ -15,7 +16,7 @@ from config.countries_djr import DJR_SHEET_COUNTRIES as djr_master_countries
 from config.layouts_djr import DJR_WEEK_LAYOUT as djr_layout
 from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
-from openpyxl.styles import PatternFill, Font, Alignment, Border
+
 
 def get_clean_country_name(name: str) -> str:
     return re.sub(r'\s*\(.*?\)', '', name).strip()
@@ -47,7 +48,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
 
-    # El color gris exacto que solicitaste
+    # El color gris exacto y blanco
     fill_grey = PatternFill(fill_type="solid", fgColor="BFBFBF")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
@@ -55,7 +56,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     def style_recycled_row(sheet, row_idx, label, fill_color):
         if not isinstance(row_idx, int): return
         
-        # Limpiar A y C para asegurar que no quede texto residual (como nombres de otros países)
+        # Limpiar A y C para asegurar que no quede texto residual
         cell_a = sheet.cell(row=row_idx, column=1)
         if not isinstance(cell_a, MergedCell): cell_a.value = None
         cell_c = sheet.cell(row=row_idx, column=3)
@@ -65,11 +66,12 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 20  
         
-        for c in range(3, 34): 
+        for c in range(3, 35): # Columna C hasta AH
             cell = sheet.cell(row=row_idx, column=c)
             if not isinstance(cell, MergedCell):
                 cell.value = None
             cell.fill = fill_color
+            cell.border = Border() # Quita bordes de basura previa
             
         cell2 = sheet.cell(row=row_idx, column=2)
         cell2.fill = fill_color
@@ -91,7 +93,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if not isinstance(row_idx, int): return
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 60 if is_tx else 35 
-        for c in range(4, 34):
+        for c in range(4, 35):
             cell = sheet.cell(row=row_idx, column=c)
             if not isinstance(cell, MergedCell):
                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -137,7 +139,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if my_rollout_row > 0:
                     safe_rows.add(my_rollout_row)
                     
-                    # Borrar el "Tier" de la columna B, dejando solo el País
+                    # Borrar el "Tier" de la columna B, dejando solo el País en Columna C
                     cell_b = ws.cell(row=my_rollout_row, column=2)
                     if cell_b.value and "tier" in str(cell_b.value).lower():
                         cell_b.value = None
@@ -206,8 +208,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if len(candidate_rows) >= 2:
                         used_row = candidate_rows[0]
                         link_row = candidate_rows[1]
-                        style_recycled_row(ws, used_row, "DID YOU USE THE ASSET", fill_grey)
-                        style_recycled_row(ws, link_row, "YT LINK", fill_white)
+                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
                         safe_rows.add(used_row)
                         safe_rows.add(link_row)
 
@@ -216,7 +218,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     max_content_row = dc_tc
                 
                 if country_row_rollout:
-                    for col in range(4, 34): 
+                    for col in range(4, 35): 
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
                         if "YES" not in cell_val:
                             rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row]
@@ -252,7 +254,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         cell.border = Border() 
 
         # ---------------- LA GUILLOTINA: RECOLECCIÓN DE BASURA ----------------
-        rows_to_delete = set()
+        rows_to_hide_and_clear = set()
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
         sniper_limit: int = max_content_row + 30 if max_content_row > 0 else current_max_row
@@ -275,26 +277,36 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 in_junk_section = True
 
             if in_junk_section:
-                rows_to_delete.add(r)
+                rows_to_hide_and_clear.add(r)
                 continue
                 
             if val_b.startswith("tier ") or val_a.startswith("tier "):
-                rows_to_delete.add(r)
+                rows_to_hide_and_clear.add(r)
                 continue
 
             if any(c in val_a + val_b + val_c for c in country_names_lower) or val_b == "total" or val_c == "total":
-                rows_to_delete.add(r)
+                rows_to_hide_and_clear.add(r)
                 continue
 
-        # Purga de filas vacías al final del documento
+        # Purga de filas al final del documento
         if max_content_row > 0:
             for r in range(max_content_row + 5, current_max_row + 1): 
                 if r not in safe_rows:
-                    rows_to_delete.add(r)
+                    rows_to_hide_and_clear.add(r)
 
-        # ---------------- EJECUCIÓN (ELIMINACIÓN FÍSICA EN REVERSA) ----------------
-        for r in sorted(list(rows_to_delete), reverse=True):
-            ws.delete_rows(r)
+        # ---------------- EJECUCIÓN (VACIADO Y OCULTACIÓN SEGURA) ----------------
+        # Ya no hacemos un ws.delete_rows() que rompía las Merged Cells.
+        for r in sorted(list(rows_to_hide_and_clear)):
+            ws.row_dimensions[r].hidden = True
+            ws.row_dimensions[r].height = 0
+            
+            # Recorremos hasta la columna AH (34) para despojar estilo y valor
+            for c in range(1, 35):
+                cell = ws.cell(row=r, column=c)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+                    cell.fill = PatternFill(fill_type=None) # Sin color
+                    cell.border = Border() # Sin bordes
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:

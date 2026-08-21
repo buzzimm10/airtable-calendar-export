@@ -6,7 +6,7 @@ from typing import List, Optional, Set
 from openpyxl import load_workbook
 from datetime import datetime
 from openpyxl.cell.cell import MergedCell
-from openpyxl.styles import PatternFill, Font, Alignment, Border
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 from config.layouts import TARGET_SHEET as dc_sheet_name
 from config.countries import SHEET_COUNTRIES as dc_master_countries
@@ -53,9 +53,18 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
 
-    def style_recycled_row(sheet, row_idx, label, fill_color):
+    # Definición de bordes
+    thin_side = Side(border_style="thin", color="000000")
+    thick_side = Side(border_style="medium", color="000000") # Borde más grueso
+    
+    border_normal = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
+    border_thick_bottom = Border(top=thin_side, bottom=thick_side, left=thin_side, right=thin_side)
+
+    def style_recycled_row(sheet, row_idx, label, fill_color, is_last=False):
         if not isinstance(row_idx, int): return
         
+        applied_border = border_thick_bottom if is_last else border_normal
+
         # Limpiar A y C para asegurar que no quede texto residual
         cell_a = sheet.cell(row=row_idx, column=1)
         if not isinstance(cell_a, MergedCell): cell_a.value = None
@@ -66,15 +75,15 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 20  
         
-        for c in range(3, 35): # Columna C hasta AH
+        # Aplicar estilos, colores y BORDES desde la columna B (2) hasta AH (34)
+        for c in range(2, 35): 
             cell = sheet.cell(row=row_idx, column=c)
-            if not isinstance(cell, MergedCell):
+            if c >= 3 and not isinstance(cell, MergedCell):
                 cell.value = None
             cell.fill = fill_color
-            cell.border = Border() # Quita bordes de basura previa
+            cell.border = applied_border
             
         cell2 = sheet.cell(row=row_idx, column=2)
-        cell2.fill = fill_color
         cell2.font = font_bold
         cell2.alignment = Alignment(horizontal="right", vertical="center")
 
@@ -139,10 +148,18 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if my_rollout_row > 0:
                     safe_rows.add(my_rollout_row)
                     
-                    # Borrar el "Tier" de la columna B, dejando solo el País en Columna C
+                    # Pasar el nombre del país a la columna B y fusionar B con C
                     cell_b = ws.cell(row=my_rollout_row, column=2)
-                    if cell_b.value and "tier" in str(cell_b.value).lower():
-                        cell_b.value = None
+                    cell_c = ws.cell(row=my_rollout_row, column=3)
+                    country_name_val = cell_c.value
+                    
+                    cell_b.value = country_name_val
+                    cell_c.value = None
+                    cell_b.alignment = Alignment(horizontal='center', vertical='center')
+                    try:
+                        ws.merge_cells(start_row=my_rollout_row, start_column=2, end_row=my_rollout_row, end_column=3)
+                    except:
+                        pass
 
                 djr_tc = layout.get("tc_row")
                 if isinstance(djr_tc, int) and djr_tc > max_content_row:
@@ -157,18 +174,16 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if len(candidate_rows) >= 2:
                     used_row = candidate_rows[0]
                     link_row = candidate_rows[1]
-                    style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
-                    style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
+                    style_recycled_row(ws, used_row, "USED OR NOT", fill_grey, is_last=False)
+                    style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white, is_last=True)
                     safe_rows.add(used_row)
                     safe_rows.add(link_row)
 
-                # Limpiar datos no aplicables (Borra texto "NO" de la fila país + borra datos abajo)
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
                         cell = ws.cell(row=my_rollout_row, column=col)
                         cell_val = str(cell.value).strip().upper()
                         if "YES" not in cell_val:
-                            # Vaciar completamente la celda del país (borra "NO" o "TBC")
                             if not isinstance(cell, MergedCell):
                                 cell.value = None
 
@@ -197,9 +212,18 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if country_row_rollout:
                     safe_rows.add(country_row_rollout)
                     
+                    # Pasar el nombre del país a la columna B y fusionar B con C
                     cell_b = ws.cell(row=country_row_rollout, column=2)
-                    if cell_b.value and "tier" in str(cell_b.value).lower():
-                        cell_b.value = None
+                    cell_c = ws.cell(row=country_row_rollout, column=3)
+                    country_name_val = cell_c.value
+                    
+                    cell_b.value = country_name_val
+                    cell_c.value = None
+                    cell_b.alignment = Alignment(horizontal='center', vertical='center')
+                    try:
+                        ws.merge_cells(start_row=country_row_rollout, start_column=2, end_row=country_row_rollout, end_column=3)
+                    except:
+                        pass
 
                     candidate_rows = [r for r in block.rollout_country_rows.values() if r > country_row_rollout]
                     if len(candidate_rows) < 2:
@@ -209,8 +233,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if len(candidate_rows) >= 2:
                         used_row = candidate_rows[0]
                         link_row = candidate_rows[1]
-                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
-                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
+                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey, is_last=False)
+                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white, is_last=True)
                         safe_rows.add(used_row)
                         safe_rows.add(link_row)
 
@@ -218,13 +242,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if isinstance(dc_tc, int) and dc_tc > max_content_row:
                     max_content_row = dc_tc
                 
-                # Limpiar datos no aplicables (Borra texto "NO" de la fila país + borra datos abajo)
                 if country_row_rollout:
                     for col in range(4, 35): 
                         cell = ws.cell(row=country_row_rollout, column=col)
                         cell_val = str(cell.value).strip().upper()
                         if "YES" not in cell_val:
-                            # Vaciar completamente la celda del país (borra "NO" o "TBC")
                             if not isinstance(cell, MergedCell):
                                 cell.value = None
 
@@ -265,7 +287,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         country_names_lower = [c.lower() for c in master_countries]
         sniper_limit: int = max_content_row + 30 if max_content_row > 0 else current_max_row
         
-        # Palabras escudo que NO deben borrarse bajo ningún concepto
         standard_headers = [
             "deadline for delivery", "owner", "property", 
             "content type", "title", "synopsis", "planning strategy"
@@ -278,17 +299,14 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             val_d = get_val(ws, r, 4)
             combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
             
-            # 1. Escudo Protector: Si detectamos cabeceras clave o el indicador de semana
             if any(h in combined_val for h in standard_headers) or val_b.startswith("week "):
                 safe_rows.add(r)
-                in_junk_section = False # Apaga la recolección de basura inmediatamente
+                in_junk_section = False
 
-            # Si la fila es segura (país, reciclada, escudo), se interrumpe la racha de borrar basura
             if r in safe_rows:
                 in_junk_section = False
                 continue
             
-            # 2. Iniciar racha de borrado cuando detectamos etiquetas inútiles
             if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in"]):
                 in_junk_section = True
 
@@ -296,7 +314,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rows_to_hide_and_clear.add(r)
                 continue
                 
-            # 3. Eliminar otros tiers o países que sobran en la semana
             if val_b.startswith("tier ") or val_a.startswith("tier "):
                 rows_to_hide_and_clear.add(r)
                 continue
@@ -305,7 +322,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rows_to_hide_and_clear.add(r)
                 continue
 
-        # Purga de filas vacías extra al final del documento
         if max_content_row > 0:
             for r in range(max_content_row + 5, current_max_row + 1): 
                 if r not in safe_rows:
@@ -316,7 +332,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             ws.row_dimensions[r].hidden = True
             ws.row_dimensions[r].height = 0
             
-            # Despojar de valores, bordes y colores
             for c in range(1, 35):
                 cell = ws.cell(row=r, column=c)
                 if not isinstance(cell, MergedCell):

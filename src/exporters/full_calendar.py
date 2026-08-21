@@ -392,7 +392,15 @@ def write_countries_rollout_fixed(ws, block, per_day_role_records, channel_id_to
                 notes=record.get(AT_FIELDS["notes"]),
                 excluded_markets=record.get(AT_FIELDS["excluded_markets"]),
                 channel_id_to_name_map=channel_id_to_name_map,
-)
+            )
+
+            # --- INICIO DEL INTERCEPTOR: REGLA DE PORTUGAL ---
+            ct_val = str(record.get("fields", record).get(AT_FIELDS["content_type"], "")).upper()
+            region_val = str(record.get("fields", record).get(AT_FIELDS["region"], "")).upper()
+            
+            if "VERTICAL SHORT" in ct_val and "TIER A" in region_val:
+                included.add("Portugal")
+            # --- FIN DEL INTERCEPTOR ---
 
             for country_name, rollout_row in block.rollout_country_rows.items():
                 val = "YES" if country_name in included else "NO"

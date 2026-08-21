@@ -47,7 +47,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
 
-    fill_grey = PatternFill(fill_type="solid", fgColor="D0CECE")
+    # Ajuste del color gris al solicitado
+    fill_grey = PatternFill(fill_type="solid", fgColor="BFBFBF")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
 
@@ -58,7 +59,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if not isinstance(cell_a, MergedCell):
             cell_a.value = None
 
-        # Borrar información de Tiers en la columna B
+        # Borrar información de Tiers en la columna B (manteniendo el país en C)
         cell_b_prev = sheet.cell(row=row_idx - 1, column=2)
         if not isinstance(cell_b_prev, MergedCell) and cell_b_prev.value and "tier" in str(cell_b_prev.value).lower():
            cell_b_prev.value = None
@@ -159,8 +160,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if not is_israel:
                     tx_val = layout.get("tx_row")
                     tc_val = layout.get("tc_row")
-                    style_recycled_row(ws, tx_val, "DID YOU USE THE ASSET", fill_grey)
-                    style_recycled_row(ws, tc_val, "YT LINK", fill_white)
+                    # Revertido a las etiquetas originales
+                    style_recycled_row(ws, tx_val, "USED OR NOT", fill_grey)
+                    style_recycled_row(ws, tc_val, "LINK YOUTUBE", fill_white)
                     
                     if isinstance(tx_val, int): safe_rows.add(tx_val)
                     if isinstance(tc_val, int): safe_rows.add(tc_val)
@@ -180,8 +182,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if len(available_rows) >= 2:
                         used_row = available_rows[0]
                         link_row = available_rows[1]
-                        style_recycled_row(ws, used_row, "DID YOU USE THE ASSET", fill_grey)
-                        style_recycled_row(ws, link_row, "YT LINK", fill_white)
+                        # Revertido a las etiquetas originales
+                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
                         if isinstance(used_row, int): safe_rows.add(used_row)
                         if isinstance(link_row, int): safe_rows.add(link_row)
 
@@ -215,8 +218,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if not is_israel:
                     tx_val = block.tx_row
                     tc_val = block.tc_row
-                    style_recycled_row(ws, tx_val, "DID YOU USE THE ASSET", fill_grey)
-                    style_recycled_row(ws, tc_val, "YT LINK", fill_white)
+                    # Revertido a las etiquetas originales
+                    style_recycled_row(ws, tx_val, "USED OR NOT", fill_grey)
+                    style_recycled_row(ws, tc_val, "LINK YOUTUBE", fill_white)
                     
                     if isinstance(tx_val, int): safe_rows.add(tx_val)
                     if isinstance(tc_val, int): safe_rows.add(tc_val)
@@ -237,8 +241,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if len(available_rows) >= 2:
                         used_row = available_rows[0]
                         link_row = available_rows[1]
-                        style_recycled_row(ws, used_row, "DID YOU USE THE ASSET", fill_grey)
-                        style_recycled_row(ws, link_row, "YT LINK", fill_white)
+                        # Revertido a las etiquetas originales
+                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
+                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
                         if isinstance(used_row, int): safe_rows.add(used_row)
                         if isinstance(link_row, int): safe_rows.add(link_row)
 

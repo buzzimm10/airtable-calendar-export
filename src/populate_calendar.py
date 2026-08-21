@@ -120,6 +120,16 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
 
     anchor_dates_map = full_calendar_anchor_dates_from_records(records)
 
+    # --- PARCHE PARA SOBRESCRIBIR LAS COORDENADAS ANTIGUAS DE CORE/DATES.PY ---
+    if anchor_dates_map and channel == "Disney Channel":
+        new_coords = ["D6", "D60", "D114", "D168", "D222"]
+        updated_map = {}
+        for idx, (old_addr, date_val) in enumerate(anchor_dates_map.items()):
+            if idx < len(new_coords):
+                updated_map[new_coords[idx]] = date_val
+        anchor_dates_map = updated_map
+    # -------------------------------------------------------------------------
+
     if not anchor_dates_map:
         anchor_dates_map = get_anchor_dates_from_values_wb(template_path, week_anchor_cells)
 

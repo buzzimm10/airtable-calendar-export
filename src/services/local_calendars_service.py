@@ -47,7 +47,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
 
-    # Ajuste del color gris al solicitado
+    # El color gris exacto que solicitaste
     fill_grey = PatternFill(fill_type="solid", fgColor="BFBFBF")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
@@ -55,14 +55,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     def style_recycled_row(sheet, row_idx, label, fill_color):
         if not isinstance(row_idx, int): return
         
+        # Limpiar A y C para asegurar que no quede texto residual (como nombres de otros países)
         cell_a = sheet.cell(row=row_idx, column=1)
-        if not isinstance(cell_a, MergedCell):
-            cell_a.value = None
-
-        # Borrar información de Tiers en la columna B (manteniendo el país en C)
-        cell_b_prev = sheet.cell(row=row_idx - 1, column=2)
-        if not isinstance(cell_b_prev, MergedCell) and cell_b_prev.value and "tier" in str(cell_b_prev.value).lower():
-           cell_b_prev.value = None
+        if not isinstance(cell_a, MergedCell): cell_a.value = None
+        cell_c = sheet.cell(row=row_idx, column=3)
+        if not isinstance(cell_c, MergedCell): cell_c.value = None
 
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
@@ -116,7 +113,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         
         max_content_row: int = 0
         current_max_row: int = ws.max_row if isinstance(ws.max_row, int) else 500
-        
         safe_rows: Set[int] = set()
 
         ws.column_dimensions['AG'].hidden = True
@@ -140,33 +136,42 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 
                 if my_rollout_row > 0:
                     safe_rows.add(my_rollout_row)
-                    # Proteger fila del país (justo antes del YES/NO)
-                    safe_rows.add(my_rollout_row - 1)
-                
+                    
+                    # Borrar el "Tier" de la columna B, dejando solo el País
+                    cell_b = ws.cell(row=my_rollout_row, column=2)
+                    if cell_b.value and "tier" in str(cell_b.value).lower():
+                        cell_b.value = None
+
                 djr_tc = layout.get("tc_row")
                 if isinstance(djr_tc, int) and djr_tc > max_content_row:
                     max_content_row = djr_tc
                 
+                # Buscar filas DEBAJO del país para usarlas como etiquetas locales
+                candidate_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if r > my_rollout_row]
+                if len(candidate_rows) < 2:
+                    status_start = layout.get("status_rows", [0])[0]
+                    candidate_rows.extend([r for r in range(status_start, status_start + 30) if r > my_rollout_row])
+                
+                candidate_rows = sorted(list(set(candidate_rows)))
+                if len(candidate_rows) >= 2:
+                    used_row = candidate_rows[0]
+                    link_row = candidate_rows[1]
+                    style_recycled_row(ws, used_row, "DID YOU USE THE ASSET", fill_grey)
+                    style_recycled_row(ws, link_row, "YT LINK", fill_white)
+                    safe_rows.add(used_row)
+                    safe_rows.add(link_row)
+
+                # Limpiar datos no aplicables (NO)
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
                         cell_val = str(ws.cell(row=my_rollout_row, column=col).value).strip().upper()
                         if "YES" not in cell_val:
-                            rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"], layout.get("tx_row"), layout.get("tc_row")]
+                            rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"]]
+                            if is_israel: rows_to_clear.extend([layout.get("tx_row"), layout.get("tc_row")])
                             for r in rows_to_clear: clear_cell(ws, r, col)
-                        elif not is_israel:
-                            clear_cell(ws, layout.get("tx_row"), col)
-                            clear_cell(ws, layout.get("tc_row"), col)
 
-                if not is_israel:
-                    tx_val = layout.get("tx_row")
-                    tc_val = layout.get("tc_row")
-                    # Revertido a las etiquetas originales
-                    style_recycled_row(ws, tx_val, "USED OR NOT", fill_grey)
-                    style_recycled_row(ws, tc_val, "LINK YOUTUBE", fill_white)
-                    
-                    if isinstance(tx_val, int): safe_rows.add(tx_val)
-                    if isinstance(tc_val, int): safe_rows.add(tc_val)
-                else:
+                # Israel conserva sus filas TX/TC
+                if is_israel:
                     israel_tx = layout.get("tx_row")
                     if isinstance(israel_tx, int): 
                         format_israel_tx_tc(ws, israel_tx, is_tx=True)
@@ -176,17 +181,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if isinstance(israel_tc, int): 
                         format_israel_tx_tc(ws, israel_tc, is_tx=False)
                         safe_rows.add(israel_tc)
-                    
-                    available_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if isinstance(djr_tc, int) and r > djr_tc and r != my_rollout_row]
-                    available_rows.sort()
-                    if len(available_rows) >= 2:
-                        used_row = available_rows[0]
-                        link_row = available_rows[1]
-                        # Revertido a las etiquetas originales
-                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
-                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
-                        if isinstance(used_row, int): safe_rows.add(used_row)
-                        if isinstance(link_row, int): safe_rows.add(link_row)
 
         # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
@@ -197,9 +191,26 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 
                 if country_row_rollout:
                     safe_rows.add(country_row_rollout)
-                    # Proteger fila del país (justo antes del YES/NO)
-                    safe_rows.add(country_row_rollout - 1)
-                
+                    
+                    # Borrar el "Tier" de la columna B, dejando solo el País
+                    cell_b = ws.cell(row=country_row_rollout, column=2)
+                    if cell_b.value and "tier" in str(cell_b.value).lower():
+                        cell_b.value = None
+
+                    # Buscar filas DEBAJO del país para usarlas como etiquetas locales
+                    candidate_rows = [r for r in block.rollout_country_rows.values() if r > country_row_rollout]
+                    if len(candidate_rows) < 2:
+                        candidate_rows.extend([r for r in block.status_country_rows.values() if r > country_row_rollout])
+                    
+                    candidate_rows = sorted(list(set(candidate_rows)))
+                    if len(candidate_rows) >= 2:
+                        used_row = candidate_rows[0]
+                        link_row = candidate_rows[1]
+                        style_recycled_row(ws, used_row, "DID YOU USE THE ASSET", fill_grey)
+                        style_recycled_row(ws, link_row, "YT LINK", fill_white)
+                        safe_rows.add(used_row)
+                        safe_rows.add(link_row)
+
                 dc_tc = block.tc_row
                 if isinstance(dc_tc, int) and dc_tc > max_content_row:
                     max_content_row = dc_tc
@@ -208,23 +219,13 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     for col in range(4, 34): 
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
                         if "YES" not in cell_val:
-                            rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row, block.tx_row, block.tc_row, getattr(block, 'burned_in_text_row', None), block.comments_row]
+                            rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row]
+                            if is_israel: rows_to_clear.extend([block.tx_row, block.tc_row])
                             rows_to_clear = [r for r in rows_to_clear if r is not None]
                             for r in rows_to_clear: clear_cell(ws, r, col)
-                        elif not is_israel:
-                            clear_cell(ws, block.tx_row, col)
-                            clear_cell(ws, block.tc_row, col)
 
-                if not is_israel:
-                    tx_val = block.tx_row
-                    tc_val = block.tc_row
-                    # Revertido a las etiquetas originales
-                    style_recycled_row(ws, tx_val, "USED OR NOT", fill_grey)
-                    style_recycled_row(ws, tc_val, "LINK YOUTUBE", fill_white)
-                    
-                    if isinstance(tx_val, int): safe_rows.add(tx_val)
-                    if isinstance(tc_val, int): safe_rows.add(tc_val)
-                else:
+                # Israel conserva sus filas TX/TC
+                if is_israel:
                     israel_dc_tx = block.tx_row
                     if isinstance(israel_dc_tx, int): 
                         format_israel_tx_tc(ws, israel_dc_tx, is_tx=True)
@@ -234,18 +235,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     if isinstance(israel_dc_tc, int): 
                         format_israel_tx_tc(ws, israel_dc_tc, is_tx=False)
                         safe_rows.add(israel_dc_tc)
-                    
-                    available_rows = list(block.rollout_country_rows.values())
-                    if country_row_rollout in available_rows: available_rows.remove(country_row_rollout)
-                    available_rows.sort()
-                    if len(available_rows) >= 2:
-                        used_row = available_rows[0]
-                        link_row = available_rows[1]
-                        # Revertido a las etiquetas originales
-                        style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
-                        style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
-                        if isinstance(used_row, int): safe_rows.add(used_row)
-                        if isinstance(link_row, int): safe_rows.add(link_row)
 
         # ---------------- LA FILA BLANCA PERFECTA ENTRE SEMANAS ----------------
         for r in range(5, current_max_row + 1):
@@ -263,7 +252,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         cell.border = Border() 
 
         # ---------------- LA GUILLOTINA: RECOLECCIÓN DE BASURA ----------------
-        rows_to_clear_and_hide = set()
+        rows_to_delete = set()
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
         sniper_limit: int = max_content_row + 30 if max_content_row > 0 else current_max_row
@@ -281,37 +270,31 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             if val_b.startswith("week "):
                 in_junk_section = False
             
-            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned"]):
+            # Aniquilación total de secciones que no van (INCLUYENDO TX y TC para países normales)
+            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in"]):
                 in_junk_section = True
 
             if in_junk_section:
-                rows_to_clear_and_hide.add(r)
+                rows_to_delete.add(r)
                 continue
                 
             if val_b.startswith("tier ") or val_a.startswith("tier "):
-                rows_to_clear_and_hide.add(r)
+                rows_to_delete.add(r)
                 continue
 
             if any(c in val_a + val_b + val_c for c in country_names_lower) or val_b == "total" or val_c == "total":
-                rows_to_clear_and_hide.add(r)
+                rows_to_delete.add(r)
                 continue
 
         # Purga de filas vacías al final del documento
         if max_content_row > 0:
             for r in range(max_content_row + 5, current_max_row + 1): 
                 if r not in safe_rows:
-                    rows_to_clear_and_hide.add(r)
+                    rows_to_delete.add(r)
 
-        # ---------------- EJECUCIÓN (VACIADO Y OCULTACIÓN SEGURA) ----------------
-        for r in rows_to_clear_and_hide:
-            ws.row_dimensions[r].hidden = True
-            ws.row_dimensions[r].height = 0  # Colapsar visualmente
-            for col_idx in range(1, 35):
-                cell = ws.cell(row=r, column=col_idx)
-                if not isinstance(cell, MergedCell):
-                    cell.value = None
-                    cell.fill = PatternFill(fill_type=None)
-                    cell.border = Border()
+        # ---------------- EJECUCIÓN (ELIMINACIÓN FÍSICA EN REVERSA) ----------------
+        for r in sorted(list(rows_to_delete), reverse=True):
+            ws.delete_rows(r)
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:

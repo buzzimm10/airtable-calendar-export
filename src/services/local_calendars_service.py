@@ -156,8 +156,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if len(candidate_rows) >= 2:
                     used_row = candidate_rows[0]
                     link_row = candidate_rows[1]
-                    style_recycled_row(ws, used_row, "DID YOU USE THE ASSET", fill_grey)
-                    style_recycled_row(ws, link_row, "YT LINK", fill_white)
+                    style_recycled_row(ws, used_row, "USED OR NOT", fill_grey)
+                    style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white)
                     safe_rows.add(used_row)
                     safe_rows.add(link_row)
 

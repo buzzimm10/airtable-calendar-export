@@ -4,7 +4,7 @@ Populate the 'FULL CALENDAR YT DC EMEA' sheet of an existing Excel template
 from Airtable (or local JSON) using openpyxl.
 
 PATCHES (2026-03-25):
-- Week label: write "WEEK <Week Number (Year)>" into merged cells B6, B59, B112, B165, B218 (per week block).
+- Week label: write "WEEK <Week Number (Year)>" into merged cells B6, B60, B114, B168, B222 (per week block).
   Value inferred from Airtable records of that week; fallback to ISO week from Monday date.
 - Countries by Hub: keep writing YES/NO in the correct hub column; uniform font
   (YES black, NO red; Italy always red).
@@ -102,7 +102,7 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
     # -------------------------------------------------------
 
     # === LÓGICA DE EXPORTACIÓN PARA DISNEY CHANNEL ===
-    week_anchor_cells = week_anchor_cells or ["D6", "D59", "D112", "D165", "D218"]
+    week_anchor_cells = week_anchor_cells or ["D6", "D60", "D114", "D168", "D222"]
     if channel_id_to_name_map is None:
         channel_id_to_name_map = {}
 
@@ -311,9 +311,9 @@ def main():
         channel=args.channel,
         json_path=args.json,
         log_level=args.log_level,
-)
+    )
 
-    week_anchors = args.anchors if args.anchors else ["D6", "D59", "D112", "D165", "D218"]
+    week_anchors = args.anchors if args.anchors else ["D6", "D60", "D114", "D168", "D222"]
     template_path = args.template or str(template_config["template_path"])
     week_anchors = args.anchors if args.anchors else template_config["week_anchor_cells"]
 

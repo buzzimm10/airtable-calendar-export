@@ -498,7 +498,7 @@ def populate_calendar_djr(
     cleanup_stale_merged_cells(ws)
     wb.template = False
 
-    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
+    # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E3 <---
 
     month_name_upper = month_name_from_records(records).capitalize()
     target_year, target_month = resolve_target_month_year(records)
@@ -511,7 +511,7 @@ def populate_calendar_djr(
             
             if target_year and target_month:
                 ws_high = wb[new_title]
-                safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="mmm-yy")
+                safe_set_value(ws_high, 3, 5, date(target_year, target_month, 1), number_format="mmm-yy")
 
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)

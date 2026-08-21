@@ -132,6 +132,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rollout_start = layout["country_rows"][0]
                 my_rollout_row = rollout_start + country_idx
                 
+                if my_rollout_row > 0:
+                    safe_rows.add(my_rollout_row)
+                
                 djr_tc = layout.get("tc_row")
                 if isinstance(djr_tc, int) and djr_tc > max_content_row:
                     max_content_row = djr_tc
@@ -182,6 +185,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 target_key = next((k for k in block.rollout_country_rows.keys() if k.lower() == country.lower()), None)
                 country_row_rollout = block.rollout_country_rows.get(target_key) if target_key else None
                 
+                if country_row_rollout:
+                    safe_rows.add(country_row_rollout)
+                
                 dc_tc = block.tc_row
                 if isinstance(dc_tc, int) and dc_tc > max_content_row:
                     max_content_row = dc_tc
@@ -191,7 +197,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
                         if "YES" not in cell_val:
                             rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row, block.tx_row, block.tc_row, getattr(block, 'burned_in_text_row', None), block.comments_row]
-                            # Limpiar de la lista los None por si acaso
                             rows_to_clear = [r for r in rows_to_clear if r is not None]
                             for r in rows_to_clear: clear_cell(ws, r, col)
                         elif not is_israel:
@@ -228,10 +233,26 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         if isinstance(used_row, int): safe_rows.add(used_row)
                         if isinstance(link_row, int): safe_rows.add(link_row)
 
-        # ---------------- EL FRANCOTIRADOR CON ESCUDO ----------------
+        # ---------------- LA FILA BLANCA PERFECTA ENTRE SEMANAS ----------------
+        for r in range(5, current_max_row + 1):
+            if get_val(ws, r, 2).startswith("week "):
+                prev_r = r - 1
+                safe_rows.add(r)
+                safe_rows.add(prev_r)
+                ws.row_dimensions[prev_r].hidden = False
+                ws.row_dimensions[prev_r].height = 15
+                for c in range(1, 35):
+                    cell = ws.cell(row=prev_r, column=c)
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None
+                        cell.fill = PatternFill(fill_type=None)
+                        cell.border = Border() 
+
+        # ---------------- LA GUILLOTINA: RECOLECCIÓN DE BASURA ----------------
+        rows_to_delete = set()
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
-        sniper_limit: int = max_content_row + 25 if max_content_row > 0 else 400
+        sniper_limit: int = max_content_row + 30 if max_content_row > 0 else current_max_row
         
         for r in range(1, sniper_limit):
             if r in safe_rows:
@@ -246,35 +267,30 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             if val_b.startswith("week "):
                 in_junk_section = False
             
-            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod"]):
+            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned"]):
                 in_junk_section = True
 
             if in_junk_section:
-                ws.row_dimensions[r].hidden = True
+                rows_to_delete.add(r)
+                continue
                 
             if val_b.startswith("tier ") or val_a.startswith("tier "):
-                ws.row_dimensions[r].hidden = True
+                rows_to_delete.add(r)
+                continue
 
             if any(c in val_a + val_b + val_c for c in country_names_lower) or val_b == "total" or val_c == "total":
-                ws.row_dimensions[r].hidden = True
+                rows_to_delete.add(r)
+                continue
 
-        # ---------------- LA FILA BLANCA PERFECTA ENTRE SEMANAS ----------------
-        for r in range(5, 400):
-            if get_val(ws, r, 2).startswith("week "):
-                prev_r = r - 1
-                ws.row_dimensions[prev_r].hidden = False
-                ws.row_dimensions[prev_r].height = 15
-                for c in range(1, 35):
-                    cell = ws.cell(row=prev_r, column=c)
-                    if not isinstance(cell, MergedCell):
-                        cell.value = None
-                        cell.fill = PatternFill(fill_type=None)
-                        cell.border = Border() 
-
-        # ---------------- LA GUILLOTINA FINAL (Fila 273+) ----------------
+        # Purga de filas vacías al final del documento
         if max_content_row > 0:
-            for r in range(max_content_row + 10, current_max_row + 50): 
-                ws.row_dimensions[r].hidden = True
+            for r in range(max_content_row + 5, current_max_row + 1): 
+                if r not in safe_rows:
+                    rows_to_delete.add(r)
+
+        # ---------------- EJECUCIÓN (ELIMINACIÓN FÍSICA EN REVERSA) ----------------
+        for r in sorted(list(rows_to_delete), reverse=True):
+            ws.delete_rows(r)
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:

@@ -5,7 +5,7 @@ import re
 from typing import List, Optional, Set
 from openpyxl import load_workbook
 from datetime import datetime
-from openpyxl.cell.cell import MergedCell
+from openpyxl.cell.cell import Cell, MergedCell
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 from config.layouts import TARGET_SHEET as dc_sheet_name
@@ -55,7 +55,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
 
     # Definición de bordes
     thin_side = Side(border_style="thin", color="000000")
-    thick_side = Side(border_style="medium", color="000000") # Borde más grueso
+    thick_side = Side(border_style="medium", color="000000") 
     
     border_normal = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
     border_thick_bottom = Border(top=thin_side, bottom=thick_side, left=thin_side, right=thin_side)
@@ -65,20 +65,20 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         
         applied_border = border_thick_bottom if is_last else border_normal
 
-        # Limpiar A y C para asegurar que no quede texto residual
+        # Limpiar A y C de forma segura
         cell_a = sheet.cell(row=row_idx, column=1)
-        if not isinstance(cell_a, MergedCell): cell_a.value = None
+        if isinstance(cell_a, Cell): cell_a.value = None
         cell_c = sheet.cell(row=row_idx, column=3)
-        if not isinstance(cell_c, MergedCell): cell_c.value = None
+        if isinstance(cell_c, Cell): cell_c.value = None
 
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 20  
         
-        # Aplicar estilos, colores y BORDES desde la columna B (2) hasta AH (34)
+        # Aplicar estilos, colores y BORDES
         for c in range(2, 35): 
             cell = sheet.cell(row=row_idx, column=c)
-            if c >= 3 and not isinstance(cell, MergedCell):
+            if c >= 3 and isinstance(cell, Cell):
                 cell.value = None
             cell.fill = fill_color
             cell.border = applied_border
@@ -90,7 +90,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     def clear_cell(sheet, row_idx, col_idx):
         if isinstance(row_idx, int) and isinstance(col_idx, int):
             cell_obj = sheet.cell(row=row_idx, column=col_idx)
-            if not isinstance(cell_obj, MergedCell):
+            if isinstance(cell_obj, Cell):
                 cell_obj.value = None
 
     def get_val(sheet, r, c):
@@ -104,7 +104,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].height = 60 if is_tx else 35 
         for c in range(4, 35):
             cell = sheet.cell(row=row_idx, column=c)
-            if not isinstance(cell, MergedCell):
+            if isinstance(cell, Cell): # Alineación solo a celdas reales
                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
     for country in selected_countries:
@@ -148,14 +148,18 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if my_rollout_row > 0:
                     safe_rows.add(my_rollout_row)
                     
-                    # Pasar el nombre del país a la columna B y fusionar B con C
                     cell_b = ws.cell(row=my_rollout_row, column=2)
                     cell_c = ws.cell(row=my_rollout_row, column=3)
-                    country_name_val = cell_c.value
                     
-                    cell_b.value = country_name_val
-                    cell_c.value = None
-                    cell_b.alignment = Alignment(horizontal='center', vertical='center')
+                    country_name_val = cell_c.value if isinstance(cell_c, Cell) else None
+                    
+                    if isinstance(cell_b, Cell):
+                        cell_b.value = country_name_val
+                        cell_b.alignment = Alignment(horizontal='center', vertical='center')
+                    
+                    if isinstance(cell_c, Cell):
+                        cell_c.value = None
+                        
                     try:
                         ws.merge_cells(start_row=my_rollout_row, start_column=2, end_row=my_rollout_row, end_column=3)
                     except:
@@ -182,9 +186,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
                         cell = ws.cell(row=my_rollout_row, column=col)
-                        cell_val = str(cell.value).strip().upper()
+                        cell_val = str(cell.value).strip().upper() if hasattr(cell, 'value') else ""
                         if "YES" not in cell_val:
-                            if not isinstance(cell, MergedCell):
+                            if isinstance(cell, Cell):
                                 cell.value = None
 
                             rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"]]
@@ -212,14 +216,18 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if country_row_rollout:
                     safe_rows.add(country_row_rollout)
                     
-                    # Pasar el nombre del país a la columna B y fusionar B con C
                     cell_b = ws.cell(row=country_row_rollout, column=2)
                     cell_c = ws.cell(row=country_row_rollout, column=3)
-                    country_name_val = cell_c.value
                     
-                    cell_b.value = country_name_val
-                    cell_c.value = None
-                    cell_b.alignment = Alignment(horizontal='center', vertical='center')
+                    country_name_val = cell_c.value if isinstance(cell_c, Cell) else None
+                    
+                    if isinstance(cell_b, Cell):
+                        cell_b.value = country_name_val
+                        cell_b.alignment = Alignment(horizontal='center', vertical='center')
+                    
+                    if isinstance(cell_c, Cell):
+                        cell_c.value = None
+                        
                     try:
                         ws.merge_cells(start_row=country_row_rollout, start_column=2, end_row=country_row_rollout, end_column=3)
                     except:
@@ -245,9 +253,9 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if country_row_rollout:
                     for col in range(4, 35): 
                         cell = ws.cell(row=country_row_rollout, column=col)
-                        cell_val = str(cell.value).strip().upper()
+                        cell_val = str(cell.value).strip().upper() if hasattr(cell, 'value') else ""
                         if "YES" not in cell_val:
-                            if not isinstance(cell, MergedCell):
+                            if isinstance(cell, Cell):
                                 cell.value = None
 
                             rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row]
@@ -276,10 +284,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 ws.row_dimensions[prev_r].height = 15
                 for c in range(1, 35):
                     cell = ws.cell(row=prev_r, column=c)
-                    if not isinstance(cell, MergedCell):
+                    if isinstance(cell, Cell):
                         cell.value = None
-                        cell.fill = PatternFill(fill_type=None)
-                        cell.border = Border() 
+                    cell.fill = PatternFill(fill_type=None)
+                    cell.border = Border() 
 
         # ---------------- LA GUILLOTINA: RECOLECCIÓN DE BASURA ----------------
         rows_to_hide_and_clear = set()
@@ -334,10 +342,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             
             for c in range(1, 35):
                 cell = ws.cell(row=r, column=c)
-                if not isinstance(cell, MergedCell):
+                if isinstance(cell, Cell):
                     cell.value = None
-                    cell.fill = PatternFill(fill_type=None)
-                    cell.border = Border()
+                cell.fill = PatternFill(fill_type=None)
+                cell.border = Border()
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:
@@ -345,7 +353,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             for r in range(1, 15):
                 for c in range(1, 10):
                     c_obj = ws_tmp.cell(row=r, column=c)
-                    if not isinstance(c_obj, MergedCell):
+                    if isinstance(c_obj, Cell):
                         v = c_obj.value
                         if isinstance(v, str) and "EMEA" in v:
                             c_obj.value = v.replace("EMEA", clean_country.upper())

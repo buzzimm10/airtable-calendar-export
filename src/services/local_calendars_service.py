@@ -148,7 +148,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if isinstance(djr_tc, int) and djr_tc > max_content_row:
                     max_content_row = djr_tc
                 
-                # Buscar filas DEBAJO del país para usarlas como etiquetas locales
                 candidate_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if r > my_rollout_row]
                 if len(candidate_rows) < 2:
                     status_start = layout.get("status_rows", [0])[0]
@@ -163,16 +162,20 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     safe_rows.add(used_row)
                     safe_rows.add(link_row)
 
-                # Limpiar datos no aplicables (NO)
+                # Limpiar datos no aplicables (Borra texto "NO" de la fila país + borra datos abajo)
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
-                        cell_val = str(ws.cell(row=my_rollout_row, column=col).value).strip().upper()
+                        cell = ws.cell(row=my_rollout_row, column=col)
+                        cell_val = str(cell.value).strip().upper()
                         if "YES" not in cell_val:
+                            # Vaciar completamente la celda del país (borra "NO" o "TBC")
+                            if not isinstance(cell, MergedCell):
+                                cell.value = None
+
                             rows_to_clear = [layout["property_row"], layout["content_type_row"], layout["title_row"], layout["synopsis_row"], layout["strategy_row"]]
                             if is_israel: rows_to_clear.extend([layout.get("tx_row"), layout.get("tc_row")])
                             for r in rows_to_clear: clear_cell(ws, r, col)
 
-                # Israel conserva sus filas TX/TC
                 if is_israel:
                     israel_tx = layout.get("tx_row")
                     if isinstance(israel_tx, int): 
@@ -194,12 +197,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if country_row_rollout:
                     safe_rows.add(country_row_rollout)
                     
-                    # Borrar el "Tier" de la columna B, dejando solo el País
                     cell_b = ws.cell(row=country_row_rollout, column=2)
                     if cell_b.value and "tier" in str(cell_b.value).lower():
                         cell_b.value = None
 
-                    # Buscar filas DEBAJO del país para usarlas como etiquetas locales
                     candidate_rows = [r for r in block.rollout_country_rows.values() if r > country_row_rollout]
                     if len(candidate_rows) < 2:
                         candidate_rows.extend([r for r in block.status_country_rows.values() if r > country_row_rollout])
@@ -217,16 +218,21 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if isinstance(dc_tc, int) and dc_tc > max_content_row:
                     max_content_row = dc_tc
                 
+                # Limpiar datos no aplicables (Borra texto "NO" de la fila país + borra datos abajo)
                 if country_row_rollout:
                     for col in range(4, 35): 
-                        cell_val = str(ws.cell(row=country_row_rollout, column=col).value).strip().upper()
+                        cell = ws.cell(row=country_row_rollout, column=col)
+                        cell_val = str(cell.value).strip().upper()
                         if "YES" not in cell_val:
+                            # Vaciar completamente la celda del país (borra "NO" o "TBC")
+                            if not isinstance(cell, MergedCell):
+                                cell.value = None
+
                             rows_to_clear = [block.content_type_row, block.property_row, block.title_row, block.synopsis_row, block.strategy_row]
                             if is_israel: rows_to_clear.extend([block.tx_row, block.tc_row])
                             rows_to_clear = [r for r in rows_to_clear if r is not None]
                             for r in rows_to_clear: clear_cell(ws, r, col)
 
-                # Israel conserva sus filas TX/TC
                 if is_israel:
                     israel_dc_tx = block.tx_row
                     if isinstance(israel_dc_tx, int): 
@@ -259,20 +265,30 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         country_names_lower = [c.lower() for c in master_countries]
         sniper_limit: int = max_content_row + 30 if max_content_row > 0 else current_max_row
         
-        for r in range(1, sniper_limit):
-            if r in safe_rows:
-                continue
+        # Palabras escudo que NO deben borrarse bajo ningún concepto
+        standard_headers = [
+            "deadline for delivery", "owner", "property", 
+            "content type", "title", "synopsis", "planning strategy"
+        ]
 
+        for r in range(1, sniper_limit):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             val_d = get_val(ws, r, 4)
             combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
             
-            if val_b.startswith("week "):
+            # 1. Escudo Protector: Si detectamos cabeceras clave o el indicador de semana
+            if any(h in combined_val for h in standard_headers) or val_b.startswith("week "):
+                safe_rows.add(r)
+                in_junk_section = False # Apaga la recolección de basura inmediatamente
+
+            # Si la fila es segura (país, reciclada, escudo), se interrumpe la racha de borrar basura
+            if r in safe_rows:
                 in_junk_section = False
+                continue
             
-            # Aniquilación total de secciones que no van (INCLUYENDO TX y TC para países normales)
+            # 2. Iniciar racha de borrado cuando detectamos etiquetas inútiles
             if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in"]):
                 in_junk_section = True
 
@@ -280,6 +296,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rows_to_hide_and_clear.add(r)
                 continue
                 
+            # 3. Eliminar otros tiers o países que sobran en la semana
             if val_b.startswith("tier ") or val_a.startswith("tier "):
                 rows_to_hide_and_clear.add(r)
                 continue
@@ -288,25 +305,24 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rows_to_hide_and_clear.add(r)
                 continue
 
-        # Purga de filas al final del documento
+        # Purga de filas vacías extra al final del documento
         if max_content_row > 0:
             for r in range(max_content_row + 5, current_max_row + 1): 
                 if r not in safe_rows:
                     rows_to_hide_and_clear.add(r)
 
         # ---------------- EJECUCIÓN (VACIADO Y OCULTACIÓN SEGURA) ----------------
-        # Ya no hacemos un ws.delete_rows() que rompía las Merged Cells.
         for r in sorted(list(rows_to_hide_and_clear)):
             ws.row_dimensions[r].hidden = True
             ws.row_dimensions[r].height = 0
             
-            # Recorremos hasta la columna AH (34) para despojar estilo y valor
+            # Despojar de valores, bordes y colores
             for c in range(1, 35):
                 cell = ws.cell(row=r, column=c)
                 if not isinstance(cell, MergedCell):
                     cell.value = None
-                    cell.fill = PatternFill(fill_type=None) # Sin color
-                    cell.border = Border() # Sin bordes
+                    cell.fill = PatternFill(fill_type=None)
+                    cell.border = Border()
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:

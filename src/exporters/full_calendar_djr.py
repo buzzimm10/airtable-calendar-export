@@ -106,7 +106,7 @@ def write_djr_month_title(ws, records):
         cell_b3 = get_writable_cell(ws, 3, 2)
         cell_b3.value = date(target_year, target_month, 1)
         cell_b3.alignment = center_wrap()
-        cell_b3.number_format = "mmm-yy" # Para que salga sep-26
+        cell_b3.number_format = "mmm-yy"
 
 def write_djr_week_number(ws, layout, week_monday):
     week_num = week_monday.isocalendar()[1]
@@ -156,7 +156,6 @@ def write_djr_asset_to_col(ws, layout, col, record):
     safe_set_value(ws, layout["title_row"], col, single["title"], alignment=center_wrap())
     safe_set_value(ws, layout["synopsis_row"], col, single["synopsis"], alignment=center_wrap())
     
-    # BYPASS PARA PLANNING STRATEGY (Mediaplanning incluido)
     strat_val = record.get("fields", record).get(AT_FIELDS["strategy"])
     if isinstance(strat_val, list):
         actual_strategy = " / ".join(normalize_str(s) for s in strat_val if normalize_str(s))
@@ -197,7 +196,6 @@ def collect_included_countries_djr(record, channel_id_to_name_map=None):
     region_raw = record.get(AT_FIELDS["region"])
     region_str = str(region_raw).lower()
     
-    # 1. Chequeo directo de Spain ONLY
     if "spain only" in region_str:
         return {"Spain"}
         
@@ -218,7 +216,6 @@ def collect_included_countries_djr(record, channel_id_to_name_map=None):
         )
         included = {DC_TO_DJR_COUNTRY.get(c, c) for c in dc_included}
         
-    # 3. Restar EXCLUDED MARKETS obligatoriamente con parche de seguridad
     ex_raw = record.get(AT_FIELDS["excluded_markets"])
     if ex_raw:
         ex_items = [lower_clean(x) for x in ex_raw] if isinstance(ex_raw, list) else [x.strip().lower() for x in str(ex_raw).split(",") if x.strip()]
@@ -294,17 +291,34 @@ def shade_djr_out_of_month_days(ws, first_monday, target_year, target_month):
 def set_djr_column_widths(ws):
     for day_name in DAY_ORDER:
         for role, col in DJR_DAY_LAYOUT[day_name]:
-            ws.column_dimensions[get_column_letter(col)].width = 30 if role in {"Programming", "Extra", "Mediaplanning"} else 16
+            if role in {"Programming", "Mediaplanning"}:
+                ws.column_dimensions[get_column_letter(col)].width = 35
+            else:
+                ws.column_dimensions[get_column_letter(col)].width = 10
 
 def set_djr_row_heights(ws):
     for week_num, layout in DJR_WEEK_LAYOUT.items():
+        # Filas normales
         for row in [
             layout["property_row"], layout["content_type_row"], layout["title_row"],
-            layout["synopsis_row"], layout["strategy_row"], layout["tx_row"],
-            layout["tc_row"], *layout["comments_rows"].values(),
+            layout["synopsis_row"], layout["strategy_row"], layout["tx_row"], layout["tc_row"]
         ]:
-            ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 38)
-
+            ws.row_dimensions[row].height = 45
+            
+        # Branding 
+        branding_layout = layout.get("branding_rows")
+        if branding_layout:
+            for br_row in branding_layout.get("watermark", []) + branding_layout.get("bug", []) + [branding_layout.get("copyright")] + branding_layout.get("endcard", []):
+                if br_row: ws.row_dimensions[br_row].height = 60
+                
+        # Comments y Status
+        for c_row in layout["comments_rows"].values():
+            if c_row: ws.row_dimensions[c_row].height = 50
+            
+        status_start, status_end = layout.get("status_rows", [0,0])
+        if status_start:
+            for sr in range(status_start, status_end + 1):
+                ws.row_dimensions[sr].height = 50
 
 # --- NUEVO: Exportar ID's (Overon Tracking) ---
 def export_overon_ids(wb, records):
@@ -366,7 +380,6 @@ def export_overon_ids(wb, records):
     valid_records.sort(key=lambda x: x[0])
 
     for _, f in valid_records:
-        # 3. Extraer Activity (o similares)
         activity_name = normalize_str(f.get("Activity") or f.get("Activity Name") or f.get("Asset Label") or f.get(AT_FIELDS["youtube_title"]))
         live_date = parse_date(f.get(AT_FIELDS["live_date"]))
         date_str = f"{live_date.day:02d}/{live_date.month:02d}" if live_date else ""
@@ -389,7 +402,6 @@ def export_overon_ids(wb, records):
         has_cd = bool(cd_raw)
         
         parsed_items = []
-        # Si es MEGA pero SI tiene el Content Details lleno con muchos items, se procesa normal
         if is_mega and not (has_cd and len(cd_lines) > 1):
             sub_titles_from_notes = [line.strip() for line in notes.split('\n') if line.strip() and "compile" not in line.lower() and "reuse" not in line.lower()]
             current_sub = sub_titles_from_notes[0] if sub_titles_from_notes else "Part 1"
@@ -486,7 +498,8 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Inyección estática en D7
+    # Merge y centrado perfecto para D7
+    ws_meta.merge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
     safe_set_value(ws_meta, 7, 4, first_monday, alignment=align_center, number_format="dd/mm/yyyy")
 
     META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
@@ -502,14 +515,22 @@ def export_metadata_spain(wb, records, first_monday):
             day_cols = [col for role, col in DJR_DAY_LAYOUT[day_name] if role == "Programming"]
             if not day_cols: continue
             
-            day_records = buckets.get((week_index, day_name, "Programming"), [])
+            # Start_col es la primera columna del día, end_col es la última
+            start_col = min([col for _, col in DJR_DAY_LAYOUT[day_name]])
+            end_col = max([col for _, col in DJR_DAY_LAYOUT[day_name]])
+            
+            # Pintar el bloque entero del día (Solo desde Property hasta Strategy)
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
-
-            # Aplicar color de fondo SOLO entre las filas Owner (start_row + 2) y Strategy (start_row + 7)
-            for r in range(start_row + 2, start_row + 8):
-                for c in day_cols:
+            for r in range(start_row + 3, start_row + 8):
+                for c in range(start_col, end_col + 1):
                     ws_meta.cell(row=r, column=c).fill = active_fill
+            
+            day_records = buckets.get((week_index, day_name, "Programming"), [])
+            
+            deadline = earliest_deadline_for_day(day_records) if day_records else None
+            if deadline:
+                safe_set_value(ws_meta, start_row + 1, start_col, deadline, alignment=align_center, number_format="dd-mmm-yy")
 
             for i, record in enumerate(day_records[:len(day_cols)]):
                 col = day_cols[i]

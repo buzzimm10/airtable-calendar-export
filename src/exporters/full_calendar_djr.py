@@ -4,7 +4,7 @@ from collections import defaultdict, Counter
 from datetime import timedelta, date
 
 from openpyxl import load_workbook
-from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from core.text_formatting import process_multiline_branding, markdown_to_richtext
@@ -114,19 +114,18 @@ def write_djr_start_date(ws, first_monday):
     cell.number_format="dd-mmm-yyyy"
 
 def write_djr_month_title(ws, records):
-    month_name = month_name_from_records(records)
-    # Corrección solicitada: Solo escribir "DISNEY JUNIOR YOUTUBE EMEA CALENDAR" en B1
+    # Escribir Título Fijo en B1
     cell_b1 = get_writable_cell(ws, 1, 2)
     cell_b1.value = "DISNEY JUNIOR YOUTUBE EMEA CALENDAR"
     cell_b1.alignment = center_wrap()
 
-    # Y la fecha del mes en B2 (ej. 01/10/2026)
+    # Escribir Fecha del Mes en B3
     target_year, target_month = resolve_target_month_year(records)
     if target_year and target_month:
-        cell_b2 = get_writable_cell(ws, 2, 2)
-        cell_b2.value = date(target_year, target_month, 1)
-        cell_b2.alignment = center_wrap()
-        cell_b2.number_format = "dd/mm/yyyy"
+        cell_b3 = get_writable_cell(ws, 3, 2)
+        cell_b3.value = date(target_year, target_month, 1)
+        cell_b3.alignment = center_wrap()
+        cell_b3.number_format = "dd/mm/yyyy"
 
 def write_djr_week_number(ws, layout, week_monday):
     week_num = week_monday.isocalendar()[1]
@@ -357,7 +356,7 @@ def set_djr_row_heights(ws):
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 38)
 
 
-# --- NUEVO: Exportar ID's ---
+# --- NUEVO: Exportar ID's (Overon Tracking) con Bordes y Reglas Exactas ---
 def export_overon_ids(wb, records):
     sheet_name = "ID's"
     if sheet_name not in wb.sheetnames:
@@ -365,27 +364,47 @@ def export_overon_ids(wb, records):
         return
 
     ws_ids = wb[sheet_name]
-    start_row = 4 # Asumiendo que los datos empiezan en la fila 4 (según captura)
+    start_row = 4
     current_row = start_row
 
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    header_fill = PatternFill(fill_type="solid", fgColor="F8CBAD")
 
-    # Filtrar y ordenar los records (solo los que tienen TX ID y TC IN/OUT)
+    def _write_cell(ws, r, c, val, align=align_center, is_header=False):
+        cell = ws.cell(row=r, column=c)
+        cell.value = val
+        cell.border = thin_border
+        cell.alignment = align
+        if is_header:
+            cell.fill = header_fill
+            cell.font = Font(bold=True)
+
+    def _apply_merged_border(ws, r_start, c_start, r_end, c_end):
+        for r in range(r_start, r_end + 1):
+            for c in range(c_start, c_end + 1):
+                ws.cell(row=r, column=c).border = thin_border
+
+    # Filtrar estrictamente Programming Hub + (Compilation o MEGA)
     valid_records = []
     for r in records:
         f = r.get("fields", r)
-        tx = normalize_str(f.get(AT_FIELDS["tx_id"]))
-        tcin = normalize_str(f.get(AT_FIELDS["tc_in"]))
-        tcout = normalize_str(f.get(AT_FIELDS["tc_out"]))
+        owner = hub_role(f.get(AT_FIELDS["owner_hub"]))
+        ctype = normalize_str(f.get(AT_FIELDS["content_type"])).lower()
+        subtype = normalize_str(f.get("Content Subtype", "")).lower()
+        title = normalize_str(f.get(AT_FIELDS["youtube_title"], "")).lower()
         
-        if tx and tcin and tcout:
-            # Intentar parsear la fecha para ordenar
+        is_prog = (owner == "Programming")
+        is_comp = ("compilation" in ctype)
+        is_mega = ("mega" in ctype or "mega" in subtype or "mega" in title)
+        
+        if is_prog and (is_comp or is_mega):
             live_date_str = f.get(AT_FIELDS["live_date"])
             parsed_date = parse_date(live_date_str) if live_date_str else date.min
             valid_records.append((parsed_date, f))
             
-    # Ordenar por fecha
     valid_records.sort(key=lambda x: x[0])
 
     for _, f in valid_records:
@@ -398,83 +417,115 @@ def export_overon_ids(wb, records):
         tx_raw = normalize_str(f.get(AT_FIELDS["tx_id"]))
         tcin_raw = normalize_str(f.get(AT_FIELDS["tc_in"]))
         tcout_raw = normalize_str(f.get(AT_FIELDS["tc_out"]))
+        cd_raw = normalize_str(f.get("Content Details", ""))
 
         tx_lines = [x.strip() for x in tx_raw.split('\n') if x.strip()]
         tcin_lines = [x.strip() for x in tcin_raw.split('\n') if x.strip()]
         tcout_lines = [x.strip() for x in tcout_raw.split('\n') if x.strip()]
+        cd_lines = [x.strip() for x in cd_raw.split('\n') if x.strip()]
 
-        num_items = max(len(tx_lines), len(tcin_lines), len(tcout_lines))
+        num_items = max(len(tx_lines), len(tcin_lines), len(tcout_lines), len(cd_lines))
+        
+        # MEGA Live Streams pueden no tener IDs, forzamos 1 fila vacía para que se pinten
+        if num_items == 0:
+            num_items = 1
 
-        # Lógica para MEGA Compilations
-        is_mega = "mega" in asset_label.lower() or "mega" in normalize_str(f.get("Content Subtype", "")).lower()
+        is_mega = "mega" in asset_label.lower() or "mega" in str(f.get("Content Subtype", "")).lower()
+        has_cd = bool(cd_raw)
 
-        if is_mega and num_items > 1:
-            # Escribir el título principal
-            safe_set_value(ws_ids, current_row, 1, f"{asset_label} {date_str}", alignment=align_center)
-            
-            # Parsear las notas para extraer los subtítulos
+        # 1. Dibujar Headers
+        if is_mega or has_cd:
+            headers = ["Content Details" if has_cd else "Content Details", "ID", "TC IN", "TC OUT"]
+            for i, h in enumerate(headers):
+                _write_cell(ws_ids, current_row, 2 + i, h, is_header=True)
+            ws_ids.cell(row=current_row, column=1).border = thin_border # Borde para A en header
+        else:
+            headers = ["ID", "TC IN", "TC OUT"]
+            for i, h in enumerate(headers):
+                _write_cell(ws_ids, current_row, 2 + i, h, is_header=True)
+            ws_ids.cell(row=current_row, column=1).border = thin_border # Borde para A en header
+        
+        current_row += 1
+        start_merge_a = current_row
+
+        # 2. Dibujar Contenidos
+        if is_mega and num_items > 0:
             notes = normalize_str(f.get(AT_FIELDS["notes"]))
             sub_comps = [line.strip() for line in notes.split('\n') if line.strip() and "compile" not in line.lower()]
-            
-            # Si no hay subtítulos claros, dividimos equitativamente por defecto
-            if not sub_comps:
+            if not sub_comps and not has_cd:
                 sub_comps = [f"Part {i+1}" for i in range(num_items)]
-            
+                
             items_per_sub = num_items // len(sub_comps) if sub_comps else 1
             remainder = num_items % len(sub_comps) if sub_comps else 0
 
-            start_merge_a = current_row
             item_idx = 0
-            
-            for sub_idx, sub_title in enumerate(sub_comps):
+            for sub_idx, sub_title in enumerate(sub_comps) if sub_comps else enumerate([""]):
                 count_for_this_sub = items_per_sub + (1 if sub_idx < remainder else 0)
                 start_merge_b = current_row
                 
                 for _ in range(count_for_this_sub):
-                    if item_idx >= num_items: break
+                    if item_idx >= num_items and item_idx > 0: break
                     
                     tx_val = tx_lines[item_idx] if item_idx < len(tx_lines) else ""
                     tcin_val = tcin_lines[item_idx] if item_idx < len(tcin_lines) else ""
                     tcout_val = tcout_lines[item_idx] if item_idx < len(tcout_lines) else ""
+                    cd_val = cd_lines[item_idx] if item_idx < len(cd_lines) else sub_title
 
-                    safe_set_value(ws_ids, current_row, 3, tx_val, alignment=align_left)
-                    safe_set_value(ws_ids, current_row, 4, tcin_val, alignment=align_center)
-                    safe_set_value(ws_ids, current_row, 5, tcout_val, alignment=align_center)
+                    # Rellenamos columnas
+                    _write_cell(ws_ids, current_row, 1, "") # Columna A reservada para merge
+                    if is_mega or has_cd:
+                        _write_cell(ws_ids, current_row, 2, cd_val if has_cd else sub_title, align=align_center)
+                        _write_cell(ws_ids, current_row, 3, tx_val, align=align_left)
+                        _write_cell(ws_ids, current_row, 4, tcin_val, align=align_center)
+                        _write_cell(ws_ids, current_row, 5, tcout_val, align=align_center)
+                    else:
+                        _write_cell(ws_ids, current_row, 2, tx_val, align=align_left)
+                        _write_cell(ws_ids, current_row, 3, tcin_val, align=align_center)
+                        _write_cell(ws_ids, current_row, 4, tcout_val, align=align_center)
+                    
                     current_row += 1
                     item_idx += 1
                 
-                # Merge Column B para este sub-compilado
-                if current_row - 1 > start_merge_b:
+                # Merge sub-compilations (Col B) si es MEGA y NO tiene Content Details
+                if not has_cd and current_row - 1 > start_merge_b:
                     ws_ids.merge_cells(start_row=start_merge_b, start_column=2, end_row=current_row-1, end_column=2)
-                safe_set_value(ws_ids, start_merge_b, 2, sub_title, alignment=align_center)
+                    _apply_merged_border(ws_ids, start_merge_b, 2, current_row-1, 2)
+                    ws_ids.cell(row=start_merge_b, column=2).alignment = align_center
 
-            # Merge Column A para el MEGA compilado
-            if current_row - 1 > start_merge_a:
-                ws_ids.merge_cells(start_row=start_merge_a, start_column=1, end_row=current_row-1, end_column=1)
-
-        elif num_items > 0:
-            # Compilado normal
-            start_merge = current_row
+        else:
             for i in range(num_items):
                 tx_val = tx_lines[i] if i < len(tx_lines) else ""
                 tcin_val = tcin_lines[i] if i < len(tcin_lines) else ""
                 tcout_val = tcout_lines[i] if i < len(tcout_lines) else ""
+                cd_val = cd_lines[i] if i < len(cd_lines) else ""
 
-                safe_set_value(ws_ids, current_row, 2, tx_val, alignment=align_left)
-                safe_set_value(ws_ids, current_row, 3, tcin_val, alignment=align_center)
-                safe_set_value(ws_ids, current_row, 4, tcout_val, alignment=align_center)
+                _write_cell(ws_ids, current_row, 1, "") # Columna A reservada
+                if has_cd:
+                    _write_cell(ws_ids, current_row, 2, cd_val, align=align_center)
+                    _write_cell(ws_ids, current_row, 3, tx_val, align=align_left)
+                    _write_cell(ws_ids, current_row, 4, tcin_val, align=align_center)
+                    _write_cell(ws_ids, current_row, 5, tcout_val, align=align_center)
+                else:
+                    _write_cell(ws_ids, current_row, 2, tx_val, align=align_left)
+                    _write_cell(ws_ids, current_row, 3, tcin_val, align=align_center)
+                    _write_cell(ws_ids, current_row, 4, tcout_val, align=align_center)
+                
                 current_row += 1
 
-            if current_row - 1 > start_merge:
-                ws_ids.merge_cells(start_row=start_merge, start_column=1, end_row=current_row-1, end_column=1)
+        # Merge Columna A (Título Principal)
+        if current_row - 1 >= start_merge_a:
+            if current_row - 1 > start_merge_a:
+                ws_ids.merge_cells(start_row=start_merge_a, start_column=1, end_row=current_row-1, end_column=1)
+            _apply_merged_border(ws_ids, start_merge_a, 1, current_row-1, 1)
             
-            safe_set_value(ws_ids, start_merge, 1, f"{asset_label} {date_str}", alignment=align_center)
-        
-        # Espacio entre bloques
+            c_a = ws_ids.cell(row=start_merge_a, column=1)
+            c_a.value = f"{asset_label} {date_str}"
+            c_a.alignment = align_center
+
         current_row += 1
 
 
-# --- NUEVO: Exportar Metadata Programming Spain ---
+# --- NUEVO: Exportar Metadata Programming Spain respetando Layout Visual ---
 def export_metadata_spain(wb, records, first_monday):
     sheet_name = "Metadata Programming Spain"
     if sheet_name not in wb.sheetnames:
@@ -482,77 +533,72 @@ def export_metadata_spain(wb, records, first_monday):
         return
 
     ws_meta = wb[sheet_name]
-    
-    # Mapeo de semanas a filas (basado en tus instrucciones)
-    # Semana 1: 6-14 | Semana 2: 16-24 | Semana 3: 26-34 | Semana 4: 36-44 | Semana 5: 46-54
-    META_WEEK_LAYOUT = {
-        1: 6,
-        2: 16,
-        3: 26,
-        4: 36,
-        5: 46
-    }
-    
-    # Filas relativas dentro de cada bloque semanal
-    META_ROWS = {
-        "day_of_week": 0,
-        "date": 1,
-        "deadline": 2,
-        "owner": 3,
-        "property": 4,
-        "content_type": 5,
-        "title": 6,
-        "synopsis": 7,
-        "strategy": 8
-    }
-
-    # Columnas por día (simplificadas para este tab, asumimos 1 columna por día C, D, E...)
-    # Asumiendo C=3, D=4, E=5, F=6, G=7, H=8, I=9
-    META_DAY_COLS = {
-        "Monday": 3, "Tuesday": 4, "Wednesday": 5, "Thursday": 6, "Friday": 7, "Saturday": 8, "Sunday": 9
-    }
-
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    # Filtrar solo Programming
+    # 1. Escribir Títulos en B1 y B3
+    cell_b1 = ws_meta.cell(row=1, column=2)
+    cell_b1.value = "DISNEY JUNIOR YOUTUBE EMEA CALENDAR"
+    cell_b1.alignment = align_center
+
+    target_year, target_month = resolve_target_month_year(records)
+    if target_year and target_month:
+        cell_b3 = ws_meta.cell(row=3, column=2)
+        cell_b3.value = date(target_year, target_month, 1)
+        cell_b3.alignment = align_center
+        cell_b3.number_format = "dd/mm/yyyy"
+
+    # 2. Mapeo de semanas estricto para Metadata Spain (6, 16, 26, 36, 46)
+    META_WEEKS = {1: 6, 2: 16, 3: 26, 4: 36, 5: 46}
+    
     prog_records = [r for r in records if hub_role(r.get("fields", r).get(AT_FIELDS["owner_hub"])) == "Programming"]
     buckets = aggregate_by_visual_week_day_role(prog_records, first_monday)
 
-    for week_index, start_row in META_WEEK_LAYOUT.items():
+    for week_index, start_row in META_WEEKS.items():
         week_monday = first_monday + timedelta(days=(week_index - 1) * 7)
         
+        # Escribir Week Number (Ej. B6:C6 está merged, escribimos en C6 = col 3)
+        ws_meta.cell(row=start_row, column=3).value = week_monday.isocalendar()[1]
+        
         for idx, day_name in enumerate(DAY_ORDER):
-            col = META_DAY_COLS[day_name]
             current_date = week_monday + timedelta(days=idx)
+            day_cols = [col for role, col in DJR_DAY_LAYOUT[day_name] if role == "Programming"]
             
-            # Escribir cabeceras de día y fecha
-            safe_set_value(ws_meta, start_row + META_ROWS["day_of_week"], col, day_name.upper(), alignment=align_center)
-            safe_set_value(ws_meta, start_row + META_ROWS["date"], col, current_date, alignment=align_center, number_format="dd-mmm-yy")
+            if not day_cols: continue
+            
+            # Colocar fecha arriba de las columnas correspondientes (En DJR la fecha abarca todo el día, usamos el min_col)
+            start_col = min([col for _, col in DJR_DAY_LAYOUT[day_name]])
+            safe_set_value(ws_meta, start_row, start_col, current_date, alignment=align_center, number_format="dd-mmm-yy")
             
             day_records = buckets.get((week_index, day_name, "Programming"), [])
             
-            if not day_records:
-                continue
+            # Escribir Deadline en la segunda fila (start_row + 1)
+            deadline = earliest_deadline_for_day(day_records) if day_records else None
+            if deadline:
+                safe_set_value(ws_meta, start_row + 1, start_col, deadline, alignment=align_center, number_format="dd-mmm-yy")
+            
+            # Escribir registros en las columnas de Programming
+            for i, record in enumerate(day_records[:len(day_cols)]):
+                col = day_cols[i]
+                f = record.get("fields", record)
+                single = assemble_text_for_single_asset(record)
                 
-            # Tomamos el primer record para llenar
-            record = day_records[0]
-            f = record.get("fields", record)
-            single = assemble_text_for_single_asset(record)
-            
-            deadline = earliest_deadline_for_day(day_records)
-            
-            # Obtener ES Title y ES Description (Nuevos campos Airtable)
-            es_title = normalize_str(f.get("ES Title", single["title"])) # Fallback al inglés si está vacío
-            es_desc = normalize_str(f.get("ES Description", single["synopsis"]))
+                es_title = normalize_str(f.get("ES Title", single["title"]))
+                es_desc = normalize_str(f.get("ES Description", single["synopsis"]))
 
-            safe_set_value(ws_meta, start_row + META_ROWS["deadline"], col, deadline, alignment=align_center, number_format="dd-mmm-yy")
-            safe_set_value(ws_meta, start_row + META_ROWS["owner"], col, "PROGRAMMING HUB", alignment=align_center)
-            safe_set_value(ws_meta, start_row + META_ROWS["property"], col, single["property"], alignment=align_center)
-            safe_set_value(ws_meta, start_row + META_ROWS["content_type"], col, single["content_type"], alignment=align_center)
-            safe_set_value(ws_meta, start_row + META_ROWS["title"], col, es_title, alignment=align_center)
-            safe_set_value(ws_meta, start_row + META_ROWS["synopsis"], col, es_desc, alignment=align_center)
-            safe_set_value(ws_meta, start_row + META_ROWS["strategy"], col, single["strategy"], alignment=align_center)
-
+                # Offset basado en el template ideal:
+                # start_row + 2 = Owner
+                # start_row + 3 = Property
+                # start_row + 4 = Content Type
+                # start_row + 5 = Title (ES)
+                # start_row + 6 = Synopsis (ES)
+                # start_row + 7 = Planning Strategy
+                
+                safe_set_value(ws_meta, start_row + 2, col, "PROGRAMMING HUB", alignment=align_center)
+                safe_set_value(ws_meta, start_row + 3, col, single["property"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 4, col, single["content_type"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 5, col, es_title, alignment=align_center)
+                safe_set_value(ws_meta, start_row + 6, col, es_desc, alignment=align_center)
+                safe_set_value(ws_meta, start_row + 7, col, single["strategy"], alignment=align_center)
 
 
 def populate_calendar_djr(
@@ -678,7 +724,6 @@ def populate_calendar_djr(
     wb.template = False
 
     month_name_upper = month_name_from_records(records).capitalize()
-    target_year, target_month = resolve_target_month_year(records)
     month_abbr = month_name_upper[:3] 
 
     for sn in wb.sheetnames:

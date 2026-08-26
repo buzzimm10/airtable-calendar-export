@@ -460,7 +460,6 @@ def export_overon_ids(wb, records):
         current_row += 1 
 
 # --- NUEVO: Exportar Metadata Programming Spain ---
-# --- NUEVO: Exportar Metadata Programming Spain ---
 def export_metadata_spain(wb, records, first_monday):
     sheet_name = "Metadata Programming Spain"
     if sheet_name not in wb.sheetnames:
@@ -483,7 +482,7 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Inyección exacta de la fecha en D7 preservando tu diseño.
+    # Inyección de la fecha en D7 preservando el diseño
     cell_d7 = ws_meta.cell(row=7, column=4)
     cell_d7.value = first_monday
     cell_d7.alignment = align_center
@@ -514,29 +513,28 @@ def export_metadata_spain(wb, records, first_monday):
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
             
-            # Pintamos de Property a Strategy para todas las columnas de ese día
-            for r in range(start_row + 4, start_row + 9):
+            # Ajuste de coordenadas del fill: De Property (+3) a Strategy (+7)
+            for r in range(start_row + 3, start_row + 8):
                 for c in range(start_col, end_col + 1):
                     ws_meta.cell(row=r, column=c).fill = active_fill
             
             day_records = buckets.get((week_index, day_name, "Programming"), [])
 
-            # Llenamos información de los assets
             for i, record in enumerate(day_records[:len(day_cols)]):
                 col = day_cols[i]
                 f = record.get("fields", record)
                 single = assemble_text_for_single_asset(record)
                 
-                # 🛑 EL CAMBIO ESTÁ AQUÍ: Se eliminó el fallback al inglés (single["title"] y single["synopsis"])
                 es_title = normalize_str(f.get("ES Title", ""))
                 es_desc = normalize_str(f.get("ES Description", ""))
 
-                safe_set_value(ws_meta, start_row + 3, col, "PROGRAMMING HUB", alignment=align_center)
-                safe_set_value(ws_meta, start_row + 4, col, single["property"], alignment=align_center)
-                safe_set_value(ws_meta, start_row + 5, col, single["content_type"], alignment=align_center)
-                safe_set_value(ws_meta, start_row + 6, col, es_title, alignment=align_center, font=font_green)
-                safe_set_value(ws_meta, start_row + 7, col, es_desc, alignment=align_center, font=font_green)
-                safe_set_value(ws_meta, start_row + 8, col, single["strategy"], alignment=align_center)
+                # Desplazamiento exacto corregido (-1 celda arriba)
+                safe_set_value(ws_meta, start_row + 2, col, "PROGRAMMING HUB", alignment=align_center)
+                safe_set_value(ws_meta, start_row + 3, col, single["property"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 4, col, single["content_type"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 5, col, es_title, alignment=align_center, font=font_green)
+                safe_set_value(ws_meta, start_row + 6, col, es_desc, alignment=align_center, font=font_green)
+                safe_set_value(ws_meta, start_row + 7, col, single["strategy"], alignment=align_center)
 
 def populate_calendar_djr(
     template_path: str,

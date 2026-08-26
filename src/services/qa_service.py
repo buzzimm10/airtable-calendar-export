@@ -27,8 +27,8 @@ def run_qa_on_records(records: List[Dict]) -> Dict:
         "info": []
     }
     
-    # Estructura para validar capacidad máxima: {(fecha, hub): cuenta}
-    daily_hub_counts = defaultdict(int)
+    # Estructura para validar capacidad máxima total por día
+    daily_total_counts = defaultdict(int)
 
     for rec in records:
         f = rec.get("fields", rec)
@@ -53,13 +53,12 @@ def run_qa_on_records(records: List[Dict]) -> Dict:
             qa_results["blockers"].append(f"🛑 [Blocker] '{title}': Live Date is missing or invalid.")
             continue
             
-        # B. Capacidad (Max 2 por slot diario por Hub)
+        # B. Capacidad (Max 4 por día en total, sin importar el Hub)
         if role and ct_clean != "event":
-            key = (live_date, role)
-            daily_hub_counts[key] += 1
-            if daily_hub_counts[key] == 3:
+            daily_total_counts[live_date] += 1
+            if daily_total_counts[live_date] == 5:
                 qa_results["blockers"].append(
-                    f"🛑 [Blocker] Capacidad excedida: Más de 2 contenidos programados para {role} el día {live_date.strftime('%Y-%m-%d')}."
+                    f"🛑 [Blocker] Capacidad excedida: Más de 4 contenidos totales programados el día {live_date.strftime('%Y-%m-%d')}."
                 )
 
         # ─── 2. WARNINGS ───
@@ -80,7 +79,7 @@ def run_qa_on_records(records: List[Dict]) -> Dict:
                 if not prop or not raw_title:
                     qa_results["warnings"].append(f"⚠️ [Warning] '{title}': Missing Property or Title in Programming Hub.")
 
-            # B.3 NUEVO: Validación de Metadatos Técnicos (TX ID, TC IN, TC OUT)
+            # B.3 Validación de Metadatos Técnicos (TX ID, TC IN, TC OUT)
             tx_id = f.get(AT_FIELDS.get("tx_id", "TX ID"))
             tc_in = f.get(AT_FIELDS.get("tc_in", "TC IN"))
             tc_out = f.get(AT_FIELDS.get("tc_out", "TC OUT"))
@@ -90,9 +89,7 @@ def run_qa_on_records(records: List[Dict]) -> Dict:
                     f"⚠️ [Warning] '{title}': Faltan metadatos técnicos críticos (TX ID, TC IN o TC OUT) en Airtable."
                 )
 
-            # B.4 NUEVO: Alerta de Compliance MENA (Bloqueo si es NO PASS)
-            # Nota: Si consideras que 'NO PASS' debe impedir la creación del Excel por completo,
-            # puedes mover este 'append' a la sección de 'blockers' de arriba.
+            # B.4 Alerta de Compliance MENA (Bloqueo si es NO PASS)
             compliance_mena = f.get(AT_FIELDS.get("compliance_mena", "Compliance Pass (MENA)"))
             if str(compliance_mena).strip().upper() == "NO PASS":
                 qa_results["warnings"].append(
@@ -115,6 +112,6 @@ def run_qa_on_records(records: List[Dict]) -> Dict:
 
         # ─── 3. INFO ───
         if role == "Mediaplanning" and ("placeholder" in title.lower() or "tbd" in title.lower()):
-            qa_results["info"].append(f"ℹ️ [Info] Mediaplanning placeholder detected on {live_date}.")
+            qa_results["info"].append(f"ℹ️ [Info] Mediaplanning placeholder detected on {live_date.strftime('%Y-%m-%d')}.")
 
     return qa_results

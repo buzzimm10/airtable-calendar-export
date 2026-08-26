@@ -37,6 +37,7 @@ from exporters.monthly_overview_djr import populate_monthly_overview_djr
 from exporters.shared.records import aggregate_by_visual_week_day_role  
 from config.fields import AT_FIELDS
 import warnings
+import re
 
 warnings.filterwarnings("ignore", message="wmf image format is not supported.*")
 warnings.filterwarnings("ignore", message="Data Validation extension is not supported.*")
@@ -298,29 +299,26 @@ def set_djr_column_widths(ws):
 
 def set_djr_row_heights(ws):
     for week_num, layout in DJR_WEEK_LAYOUT.items():
-        # Filas normales
         for row in [
             layout["property_row"], layout["content_type_row"], layout["title_row"],
             layout["synopsis_row"], layout["strategy_row"], layout["tx_row"], layout["tc_row"]
         ]:
-            ws.row_dimensions[row].height = 45
+            ws.row_dimensions[row].height = 38
             
-        # Branding 
         branding_layout = layout.get("branding_rows")
         if branding_layout:
             for br_row in branding_layout.get("watermark", []) + branding_layout.get("bug", []) + [branding_layout.get("copyright")] + branding_layout.get("endcard", []):
-                if br_row: ws.row_dimensions[br_row].height = 60
+                if br_row: ws.row_dimensions[br_row].height = 45
                 
-        # Comments y Status
         for c_row in layout["comments_rows"].values():
-            if c_row: ws.row_dimensions[c_row].height = 50
+            if c_row: ws.row_dimensions[c_row].height = 40
             
         status_start, status_end = layout.get("status_rows", [0,0])
         if status_start:
             for sr in range(status_start, status_end + 1):
-                ws.row_dimensions[sr].height = 50
+                ws.row_dimensions[sr].height = 40
 
-# --- NUEVO: Exportar ID's (Overon Tracking) ---
+
 def export_overon_ids(wb, records):
     sheet_name = "ID's"
     if sheet_name not in wb.sheetnames:
@@ -498,11 +496,17 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Merge y centrado perfecto para D7
+    # Merge seguro para D6:G6 y D7:G7. Escribimos la fecha en D6.
+    try: ws_meta.unmerge_cells(start_row=6, start_column=4, end_row=6, end_column=7)
+    except: pass
+    ws_meta.merge_cells(start_row=6, start_column=4, end_row=6, end_column=7)
+    safe_set_value(ws_meta, 6, 4, first_monday, alignment=align_center, number_format="dd/mm/yyyy")
+    
+    try: ws_meta.unmerge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
+    except: pass
     ws_meta.merge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
-    safe_set_value(ws_meta, 7, 4, first_monday, alignment=align_center, number_format="dd/mm/yyyy")
 
-    META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
+    META_WEEKS = {1: 6, 2: 16, 3: 26, 4: 36, 5: 46}
     prog_records = [r for r in records if hub_role(r.get("fields", r).get(AT_FIELDS["owner_hub"])) == "Programming"]
     buckets = aggregate_by_visual_week_day_role(prog_records, first_monday)
 
@@ -515,22 +519,18 @@ def export_metadata_spain(wb, records, first_monday):
             day_cols = [col for role, col in DJR_DAY_LAYOUT[day_name] if role == "Programming"]
             if not day_cols: continue
             
-            # Start_col es la primera columna del día, end_col es la última
             start_col = min([col for _, col in DJR_DAY_LAYOUT[day_name]])
             end_col = max([col for _, col in DJR_DAY_LAYOUT[day_name]])
             
-            # Pintar el bloque entero del día (Solo desde Property hasta Strategy)
+            # Pintar el bloque entero del día (Solo desde Property hasta Strategy, ignorando Owner)
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
             for r in range(start_row + 3, start_row + 8):
                 for c in range(start_col, end_col + 1):
-                    ws_meta.cell(row=r, column=c).fill = active_fill
+                    cell = ws_meta.cell(row=r, column=c)
+                    cell.fill = active_fill
             
             day_records = buckets.get((week_index, day_name, "Programming"), [])
-            
-            deadline = earliest_deadline_for_day(day_records) if day_records else None
-            if deadline:
-                safe_set_value(ws_meta, start_row + 1, start_col, deadline, alignment=align_center, number_format="dd-mmm-yy")
 
             for i, record in enumerate(day_records[:len(day_cols)]):
                 col = day_cols[i]

@@ -299,31 +299,35 @@ def shade_djr_out_of_month_days(ws, first_monday, target_year, target_month):
 
 def set_djr_column_widths(ws):
     for day_name in DAY_ORDER:
-        # Asignar 35 a col de contenido y 10 a vacías como UK
-        # Iteramos usando los valores crudos del layout
-        all_cols = sorted([col for _, col in DJR_DAY_LAYOUT[day_name]])
-        # Suponiendo estructura [Prog1, Extra/Prog2, Media1, UK]
-        ws.column_dimensions[get_column_letter(all_cols[0])].width = 35
-        ws.column_dimensions[get_column_letter(all_cols[1])].width = 35
-        ws.column_dimensions[get_column_letter(all_cols[2])].width = 35
-        ws.column_dimensions[get_column_letter(all_cols[3])].width = 10
+        for role, col in DJR_DAY_LAYOUT[day_name]:
+            if role in {"Programming", "Mediaplanning"}:
+                ws.column_dimensions[get_column_letter(col)].width = 35
+            else:
+                ws.column_dimensions[get_column_letter(col)].width = 10
 
 def set_djr_row_heights(ws):
-    # Se eliminan los overrides de Branding y TC para que Excel aplique su Autoajuste original (AutoFit)
     for week_num, layout in DJR_WEEK_LAYOUT.items():
+        # Filas estandar a 30
         for row in [
             layout["property_row"], layout["content_type_row"], layout["title_row"],
-            layout["synopsis_row"], layout["strategy_row"]
+            layout["synopsis_row"], layout["strategy_row"], layout["tx_row"], layout["tc_row"]
         ]:
-            ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 38)
+            ws.row_dimensions[row].height = 30
             
+        # Filas de branding y copyright (La más alta)
+        branding_layout = layout.get("branding_rows")
+        if branding_layout:
+            for br_row in branding_layout.get("watermark", []) + branding_layout.get("bug", []) + branding_layout.get("endcard", []):
+                if br_row: ws.row_dimensions[br_row].height = 38
+            
+            # Fila exclusiva de Copyright (40, 102, 164, etc.)
+            copy_row = branding_layout.get("copyright")
+            if copy_row: ws.row_dimensions[copy_row].height = 95
+                
+        # Filas de comments a 35 (Status Conforming ya no se toca)
         for c_row in layout["comments_rows"].values():
-            if c_row: ws.row_dimensions[c_row].height = 40
-            
-        status_start, status_end = layout.get("status_rows", [0,0])
-        if status_start:
-            for sr in range(status_start, status_end + 1):
-                ws.row_dimensions[sr].height = 40
+            if c_row: ws.row_dimensions[c_row].height = 35
+
 
 # --- NUEVO: Exportar ID's (Overon Tracking) ---
 def export_overon_ids(wb, records):
@@ -480,6 +484,7 @@ def export_overon_ids(wb, records):
             
         current_row += 1 
 
+# --- NUEVO: Exportar Metadata Programming Spain ---
 def export_metadata_spain(wb, records, first_monday):
     sheet_name = "Metadata Programming Spain"
     if sheet_name not in wb.sheetnames:
@@ -502,19 +507,19 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Merge seguro para D7:G7. Escribimos la fecha en D7.
-    try: ws_meta.unmerge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
-    except: pass
-    ws_meta.merge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
-    safe_set_value(ws_meta, 7, 4, first_monday, alignment=align_center, number_format="dd-mmm-yy")
+    # Inyección a prueba de fallos en la celda combinada D7:G7 (Escribimos sin invocar "merge" manual)
+    cell_d7 = ws_meta.cell(row=7, column=4)
+    cell_d7.value = first_monday
+    cell_d7.alignment = align_center
+    cell_d7.number_format = "dd-mmm-yy"
 
-    META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
+    META_WEEKS = {1: 6, 2: 16, 3: 26, 4: 36, 5: 46}
     prog_records = [r for r in records if hub_role(r.get("fields", r).get(AT_FIELDS["owner_hub"])) == "Programming"]
     buckets = aggregate_by_visual_week_day_role(prog_records, first_monday)
 
     for week_index, start_row in META_WEEKS.items():
         week_monday = first_monday + timedelta(days=(week_index - 1) * 7)
-        # La semana no rompe el template
+        ws_meta.cell(row=start_row, column=3).value = week_monday.isocalendar()[1]
         
         for idx, day_name in enumerate(DAY_ORDER):
             current_date = week_monday + timedelta(days=idx)
@@ -524,18 +529,16 @@ def export_metadata_spain(wb, records, first_monday):
             start_col = min([col for _, col in DJR_DAY_LAYOUT[day_name]])
             end_col = max([col for _, col in DJR_DAY_LAYOUT[day_name]])
             
-            # PINTAR EL FONDO PARA EL BLOQUE COMPLETO DEL DÍA (Desde Property hasta Strategy, ignorando Owner)
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
             
-            # Aplicamos el fill desde start_row + 3 (Property) hasta start_row + 7 (Strategy)
+            # Pintamos el fondo para TODO el bloque (desde start_col hasta end_col)
             for r in range(start_row + 3, start_row + 8):
                 for c in range(start_col, end_col + 1):
                     ws_meta.cell(row=r, column=c).fill = active_fill
             
             day_records = buckets.get((week_index, day_name, "Programming"), [])
 
-            # Llenamos información de los assets sin tocar las fechas manuales
             for i, record in enumerate(day_records[:len(day_cols)]):
                 col = day_cols[i]
                 f = record.get("fields", record)
@@ -583,7 +586,6 @@ def populate_calendar_djr(
             media_records = buckets.get((week_index, day_name, "Mediaplanning"), [])
             if not enable_mediaplanning: media_records = []
 
-            # Usando la nueva lógica de columnas inteligente que aprovecha todos los slots
             column_map = get_djr_target_columns(day_name, len(prog_records), len(media_records))
             write_djr_owner_row(ws, layout["owner_row"], day_name, column_map)
             write_djr_deadline(ws, layout, day_name, prog_records + media_records)

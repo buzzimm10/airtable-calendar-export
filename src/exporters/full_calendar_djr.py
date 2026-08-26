@@ -65,18 +65,14 @@ DC_TO_DJR_COUNTRY = {
 }
 
 def get_djr_target_columns(day_name, programming_count, mediaplanning_count):
-    # Extraemos y ordenamos de izquierda a derecha (0, 1, 2, 3)
     all_cols = sorted([col for _, col in DJR_DAY_LAYOUT[day_name]])
     
     p_count = min(programming_count, 4)
     m_count = min(mediaplanning_count, 4 - p_count)
     
-    # Asignación inteligente:
-    # Programming prefiere los slots: 0, 1, 2, 3
     prog_slots = [0, 1, 2, 3][:p_count]
     prog_cols = [all_cols[i] for i in prog_slots]
     
-    # Mediaplanning prefiere los slots: 2, 1, 0, 3 (Ignorando los que Programming ya tomó)
     remaining_slots = [i for i in [2, 1, 0, 3] if i not in prog_slots]
     media_slots = remaining_slots[:m_count]
     media_cols = [all_cols[i] for i in media_slots]
@@ -84,7 +80,6 @@ def get_djr_target_columns(day_name, programming_count, mediaplanning_count):
     used_slots = set(prog_slots + media_slots)
     
     uk_cols = []
-    # El slot 3 (YT TEAM UK) se mantiene intacto si no hay 4 contenidos
     if 3 not in used_slots:
         uk_cols = [all_cols[3]]
         used_slots.add(3)
@@ -299,34 +294,14 @@ def shade_djr_out_of_month_days(ws, first_monday, target_year, target_month):
 
 def set_djr_column_widths(ws):
     for day_name in DAY_ORDER:
-        for role, col in DJR_DAY_LAYOUT[day_name]:
-            if role in {"Programming", "Mediaplanning"}:
-                ws.column_dimensions[get_column_letter(col)].width = 35
-            else:
-                ws.column_dimensions[get_column_letter(col)].width = 10
+        all_cols = sorted([col for _, col in DJR_DAY_LAYOUT[day_name]])
+        ws.column_dimensions[get_column_letter(all_cols[0])].width = 35
+        ws.column_dimensions[get_column_letter(all_cols[1])].width = 35
+        ws.column_dimensions[get_column_letter(all_cols[2])].width = 35
+        ws.column_dimensions[get_column_letter(all_cols[3])].width = 10
 
 def set_djr_row_heights(ws):
-    for week_num, layout in DJR_WEEK_LAYOUT.items():
-        # Filas estandar a 30
-        for row in [
-            layout["property_row"], layout["content_type_row"], layout["title_row"],
-            layout["synopsis_row"], layout["strategy_row"], layout["tx_row"], layout["tc_row"]
-        ]:
-            ws.row_dimensions[row].height = 30
-            
-        # Filas de branding y copyright (La más alta)
-        branding_layout = layout.get("branding_rows")
-        if branding_layout:
-            for br_row in branding_layout.get("watermark", []) + branding_layout.get("bug", []) + branding_layout.get("endcard", []):
-                if br_row: ws.row_dimensions[br_row].height = 38
-            
-            # Fila exclusiva de Copyright (40, 102, 164, etc.)
-            copy_row = branding_layout.get("copyright")
-            if copy_row: ws.row_dimensions[copy_row].height = 95
-                
-        # Filas de comments a 35 (Status Conforming ya no se toca)
-        for c_row in layout["comments_rows"].values():
-            if c_row: ws.row_dimensions[c_row].height = 35
+    pass
 
 
 # --- NUEVO: Exportar ID's (Overon Tracking) ---
@@ -507,13 +482,14 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Inyección a prueba de fallos en la celda combinada D7:G7 (Escribimos sin invocar "merge" manual)
+    # Escribimos el primer lunes en D7 sin usar comandos de descombinación
     cell_d7 = ws_meta.cell(row=7, column=4)
     cell_d7.value = first_monday
     cell_d7.alignment = align_center
     cell_d7.number_format = "dd-mmm-yy"
 
-    META_WEEKS = {1: 6, 2: 16, 3: 26, 4: 36, 5: 46}
+    # Mapeo corregido a las filas reales (7, 17, 27, 37, 47)
+    META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
     prog_records = [r for r in records if hub_role(r.get("fields", r).get(AT_FIELDS["owner_hub"])) == "Programming"]
     buckets = aggregate_by_visual_week_day_role(prog_records, first_monday)
 
@@ -532,7 +508,7 @@ def export_metadata_spain(wb, records, first_monday):
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
             
-            # Pintamos el fondo para TODO el bloque (desde start_col hasta end_col)
+            # Pintamos de Property a Strategy (start_row + 3 a start_row + 7)
             for r in range(start_row + 3, start_row + 8):
                 for c in range(start_col, end_col + 1):
                     ws_meta.cell(row=r, column=c).fill = active_fill
@@ -547,6 +523,7 @@ def export_metadata_spain(wb, records, first_monday):
                 es_title = normalize_str(f.get("ES Title", single["title"]))
                 es_desc = normalize_str(f.get("ES Description", single["synopsis"]))
 
+                # Offset correcto: Owner(+2), Property(+3), Asset(+4), Title(+5), Synopsis(+6), Strategy(+7)
                 safe_set_value(ws_meta, start_row + 2, col, "PROGRAMMING HUB", alignment=align_center)
                 safe_set_value(ws_meta, start_row + 3, col, single["property"], alignment=align_center)
                 safe_set_value(ws_meta, start_row + 4, col, single["content_type"], alignment=align_center)

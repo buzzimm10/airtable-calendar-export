@@ -460,6 +460,7 @@ def export_overon_ids(wb, records):
         current_row += 1 
 
 # --- NUEVO: Exportar Metadata Programming Spain ---
+# --- NUEVO: Exportar Metadata Programming Spain ---
 def export_metadata_spain(wb, records, first_monday):
     sheet_name = "Metadata Programming Spain"
     if sheet_name not in wb.sheetnames:
@@ -482,13 +483,18 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Escribimos el primer lunes en D7 sin usar comandos de descombinación
+    # Inyección exacta de la fecha en D7 preservando tu diseño.
     cell_d7 = ws_meta.cell(row=7, column=4)
     cell_d7.value = first_monday
     cell_d7.alignment = align_center
     cell_d7.number_format = "dd-mmm-yy"
 
-    # Mapeo corregido a las filas reales (7, 17, 27, 37, 47)
+    try: 
+        ws_meta.unmerge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
+    except: 
+        pass
+    ws_meta.merge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
+
     META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
     prog_records = [r for r in records if hub_role(r.get("fields", r).get(AT_FIELDS["owner_hub"])) == "Programming"]
     buckets = aggregate_by_visual_week_day_role(prog_records, first_monday)
@@ -508,28 +514,29 @@ def export_metadata_spain(wb, records, first_monday):
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
             
-            # Pintamos de Property a Strategy (start_row + 3 a start_row + 7)
-            for r in range(start_row + 3, start_row + 8):
+            # Pintamos de Property a Strategy para todas las columnas de ese día
+            for r in range(start_row + 4, start_row + 9):
                 for c in range(start_col, end_col + 1):
                     ws_meta.cell(row=r, column=c).fill = active_fill
             
             day_records = buckets.get((week_index, day_name, "Programming"), [])
 
+            # Llenamos información de los assets
             for i, record in enumerate(day_records[:len(day_cols)]):
                 col = day_cols[i]
                 f = record.get("fields", record)
                 single = assemble_text_for_single_asset(record)
                 
-                es_title = normalize_str(f.get("ES Title", single["title"]))
-                es_desc = normalize_str(f.get("ES Description", single["synopsis"]))
+                # 🛑 EL CAMBIO ESTÁ AQUÍ: Se eliminó el fallback al inglés (single["title"] y single["synopsis"])
+                es_title = normalize_str(f.get("ES Title", ""))
+                es_desc = normalize_str(f.get("ES Description", ""))
 
-                # Offset correcto: Owner(+2), Property(+3), Asset(+4), Title(+5), Synopsis(+6), Strategy(+7)
-                safe_set_value(ws_meta, start_row + 2, col, "PROGRAMMING HUB", alignment=align_center)
-                safe_set_value(ws_meta, start_row + 3, col, single["property"], alignment=align_center)
-                safe_set_value(ws_meta, start_row + 4, col, single["content_type"], alignment=align_center)
-                safe_set_value(ws_meta, start_row + 5, col, es_title, alignment=align_center, font=font_green)
-                safe_set_value(ws_meta, start_row + 6, col, es_desc, alignment=align_center, font=font_green)
-                safe_set_value(ws_meta, start_row + 7, col, single["strategy"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 3, col, "PROGRAMMING HUB", alignment=align_center)
+                safe_set_value(ws_meta, start_row + 4, col, single["property"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 5, col, single["content_type"], alignment=align_center)
+                safe_set_value(ws_meta, start_row + 6, col, es_title, alignment=align_center, font=font_green)
+                safe_set_value(ws_meta, start_row + 7, col, es_desc, alignment=align_center, font=font_green)
+                safe_set_value(ws_meta, start_row + 8, col, single["strategy"], alignment=align_center)
 
 def populate_calendar_djr(
     template_path: str,

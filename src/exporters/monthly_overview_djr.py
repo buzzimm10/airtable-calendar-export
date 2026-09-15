@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
+from openpyxl.cell.cell import Cell
 
 from config.fields import AT_FIELDS
 from config.layouts import DAY_ORDER
@@ -206,7 +207,6 @@ def populate_monthly_overview_djr(
     wb, records, enable_mediaplanning=True,
     channel_id_to_name_map=None, target_country=None 
 ):
-    # EL FIX: Búsqueda dinámica de la pestaña (es a prueba de balas)
     overview_sheet_name = None
     for sn in wb.sheetnames:
         if "overview" in sn.lower() or "monthly" in sn.lower():
@@ -218,12 +218,15 @@ def populate_monthly_overview_djr(
 
     if target_country:
         from openpyxl.styles import PatternFill
-        # EL FIX: Purga absoluta de textos residuales de la plantilla maestra
+        # EL BYPASS: Solo borramos instancias seguras para no colisionar con MergedCells
         for col in range(4, 11):
             for row in range(5, 100):
                 cell = ws.cell(row=row, column=col)
-                cell.value = None
-                cell.fill = PatternFill(fill_type=None)
+                if isinstance(cell, Cell):
+                    try:
+                        cell.value = None
+                        cell.fill = PatternFill(fill_type=None)
+                    except: pass
                 
             for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
                 try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)

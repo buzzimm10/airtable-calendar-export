@@ -21,13 +21,8 @@ from services.planner_service import hub_role, asset_is_event
 from typing import Dict, List, Optional, Tuple
 
 DJR_OVERVIEW_DAY_COLS = {
-    "Monday": 4,
-    "Tuesday": 5,
-    "Wednesday": 6,
-    "Thursday": 7,
-    "Friday": 8,
-    "Saturday": 9,
-    "Sunday": 10,
+    "Monday": 4, "Tuesday": 5, "Wednesday": 6, "Thursday": 7,
+    "Friday": 8, "Saturday": 9, "Sunday": 10,
 }
 
 DJR_OVERVIEW_WEEK_LAYOUT = {
@@ -39,13 +34,8 @@ DJR_OVERVIEW_WEEK_LAYOUT = {
 }
 
 DJR_OVERVIEW_FILL_COLORS = {
-    "full_eps": "FFFF00",
-    "exclusive": "B4C6E7",
-    "lifts": "A9D08E",
-    "compilations": "F4B084",
-    "live": "00B0F0",
-    "podcast": "CC99FF",
-    "vertical": "FF99CC",
+    "full_eps": "FFFF00", "exclusive": "B4C6E7", "lifts": "A9D08E",
+    "compilations": "F4B084", "live": "00B0F0", "podcast": "CC99FF", "vertical": "FF99CC",
 }
 
 PROPERTY_ABBREVIATIONS = {
@@ -56,48 +46,30 @@ PROPERTY_ABBREVIATIONS = {
 }
 
 def clean_property(value):
-    if isinstance(value, list):
-        value = " / ".join(normalize_str(x) for x in value if normalize_str(x))
-
-    value = normalize_str(value)
-    value = value.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
-
+    if isinstance(value, list): value = " / ".join(normalize_str(x) for x in value if normalize_str(x))
+    value = normalize_str(value).replace("[", "").replace("]", "").replace("'", "").replace('"', "")
     return PROPERTY_ABBREVIATIONS.get(value, value)
-
 
 def get_episode_category(record):
     category = normalize_str(record.get(AT_FIELDS.get("episode_category", "Episode Category")))
-    if not category:
-        return "CURRENT"
-
+    if not category: return "CURRENT"
     category_upper = category.upper()
-
-    if "LIBRARY" in category_upper:
-        return "LIBRARY"
-    if "CURRENT" in category_upper:
-        return "CURRENT"
-
+    if "LIBRARY" in category_upper: return "LIBRARY"
+    if "CURRENT" in category_upper: return "CURRENT"
     return category_upper
 
 def get_djr_overview_region_text(record):
     region_text = normalize_overview_region(record.get(AT_FIELDS["region"]))
-    region_text = region_text.replace("TIER A, B & C", "TIER A, B, C")
-    return region_text
-
+    return region_text.replace("TIER A, B & C", "TIER A, B, C")
 
 def get_episode_number(record):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
-
     source = f"{activity} {title}"
-
     import re
     match = re.search(r"\b(?:ep|episode|episodio)\.?\s*(\d+)", source, re.I)
-    if match:
-        return match.group(1)
-
+    if match: return match.group(1)
     return ""
-
 
 def build_djr_overview_text(record, target_country=None):
     content_type = normalize_str(record.get(AT_FIELDS["content_type"]))
@@ -137,8 +109,7 @@ def build_djr_overview_text(record, target_country=None):
         return f"{prefix} {prop}\n{region}{gf_suffix}".strip()
 
     if content_type == "Live Stream":
-        if "full" in title.lower() or "episode" in title.lower():
-            return f"{prop} Compilation Full Eps\n{region}{gf_suffix}".strip()
+        if "full" in title.lower() or "episode" in title.lower(): return f"{prop} Compilation Full Eps\n{region}{gf_suffix}".strip()
         return f"MEGA {prop}\n{region}{gf_suffix}".strip()
 
     if content_type == "Podcast":
@@ -176,16 +147,13 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_row, bottom_row = layout["vertical_rows"]
     top_cell = get_writable_cell(ws, top_row, col)
     bottom_cell = get_writable_cell(ws, bottom_row, col)
-
     top_text = build_djr_overview_text(record, target_country=target_country)
     bottom_text = get_djr_overview_region_text(record)
-
     append_to_cell(top_cell, top_text)
 
     fill = PatternFill(fill_type="solid", fgColor=DJR_OVERVIEW_FILL_COLORS["vertical"])
     top_cell.fill = fill
     bottom_cell.fill = fill
-
     top_cell.font = Font(bold=True, color="FF000000")
     top_cell.alignment = center_wrap()
 
@@ -201,7 +169,6 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
 
 def write_djr_overview_header(ws, records):
     month_name = month_name_from_records(records)
-
     title_cell = get_writable_cell(ws, 5, 2)
     existing = normalize_str(title_cell.value)
     if existing: title_cell.value = existing.replace("MONTH", month_name)
@@ -214,7 +181,6 @@ def write_djr_overview_header(ws, records):
         date_cell.value = first_monday
         date_cell.number_format = "dd-mmm"
         date_cell.alignment = center_wrap()
-
     return first_monday
 
 def auto_adjust_djr_overview_heights(ws):
@@ -245,12 +211,14 @@ def populate_monthly_overview_djr(
 
     if target_country:
         from openpyxl.styles import PatternFill
+        # Purga MASIVA celda por celda antes de escribir el local overview
         for col in range(4, 11):
             for row in range(10, 80):
                 cell = ws.cell(row=row, column=col)
                 cell.value = None
                 cell.fill = PatternFill(fill_type=None)
                 
+            # EL FIX: El unmerge ahora está DENTRO del loop de las columnas
             for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
                 try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
                 except: pass
@@ -266,12 +234,7 @@ def populate_monthly_overview_djr(
             
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
-            # MAGIA DEL FILTRO: Se pasan los fields en lugar del rec completo
-            included = collect_included_countries_djr(
-                record=fields, 
-                channel_id_to_name_map=channel_id_to_name_map
-            )
-            
+            included = collect_included_countries_djr(record=rec, channel_id_to_name_map=channel_id_to_name_map)
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))

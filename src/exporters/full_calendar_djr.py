@@ -35,9 +35,7 @@ from services.planner_service import (
 )
 from exporters.monthly_overview_djr import populate_monthly_overview_djr
 from exporters.shared.records import aggregate_by_visual_week_day_role  
-from config.fields import AT_FIELDS
 import warnings
-import re
 
 warnings.filterwarnings("ignore", message="wmf image format is not supported.*")
 warnings.filterwarnings("ignore", message="Data Validation extension is not supported.*")
@@ -66,7 +64,6 @@ DC_TO_DJR_COUNTRY = {
 
 def get_djr_target_columns(day_name, programming_count, mediaplanning_count):
     all_cols = sorted([col for _, col in DJR_DAY_LAYOUT[day_name]])
-    
     p_count = min(programming_count, 4)
     m_count = min(mediaplanning_count, 4 - p_count)
     
@@ -85,7 +82,6 @@ def get_djr_target_columns(day_name, programming_count, mediaplanning_count):
         used_slots.add(3)
         
     extra_cols = [all_cols[i] for i in [0, 1, 2, 3] if i not in used_slots]
-    
     return {"Programming": prog_cols, "Mediaplanning": media_cols, "UK": uk_cols, "Extra": extra_cols}
 
 def write_djr_owner_row(ws, owner_row, day_name, column_map):
@@ -104,7 +100,6 @@ def write_djr_month_title(ws, records):
     cell_b1 = get_writable_cell(ws, 1, 2)
     cell_b1.value = "DISNEY JUNIOR YOUTUBE EMEA CALENDAR"
     cell_b1.alignment = center_wrap()
-
     target_year, target_month = resolve_target_month_year(records)
     if target_year and target_month:
         cell_b3 = get_writable_cell(ws, 3, 2)
@@ -120,7 +115,6 @@ def write_djr_week_number(ws, layout, week_monday):
 def write_djr_branding(ws, layout, col, record):
     branding_layout = layout.get("branding_rows")
     if not branding_layout: return
-        
     f = record.get("fields", record)
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
@@ -132,28 +126,19 @@ def write_djr_branding(ws, layout, col, record):
         cell.alignment = alignment
 
     watermark_lines = process_multiline_branding(f.get(AT_FIELDS["branding_watermark"]), max_lines=4)
-    for idx, row in enumerate(branding_layout["watermark"]):
-        _set_rich_cell(row, col, watermark_lines[idx], align_center)
-
+    for idx, row in enumerate(branding_layout["watermark"]): _set_rich_cell(row, col, watermark_lines[idx], align_center)
     bug_lines = process_multiline_branding(f.get(AT_FIELDS["branding_bug"]), max_lines=3)
-    for idx, row in enumerate(branding_layout["bug"]):
-        _set_rich_cell(row, col, bug_lines[idx], align_center)
-
+    for idx, row in enumerate(branding_layout["bug"]): _set_rich_cell(row, col, bug_lines[idx], align_center)
     copyright_text = f.get(AT_FIELDS["branding_copyright"], "")
     _set_rich_cell(branding_layout["copyright"], col, copyright_text, align_left)
-
     endcard_lines = process_multiline_branding(f.get(AT_FIELDS["branding_endcard"]), max_lines=6)
-    for idx, row in enumerate(branding_layout["endcard"]):
-        _set_rich_cell(row, col, endcard_lines[idx], align_center)
+    for idx, row in enumerate(branding_layout["endcard"]): _set_rich_cell(row, col, endcard_lines[idx], align_center)
 
 def write_djr_asset_to_col(ws, layout, col, record):
     single = assemble_text_for_single_asset(record)
     content_type = single["content_type"]
-
-    if normalize_str(record.get(AT_FIELDS["content_type"])) in {"Editorial Short", "Exclusive"}:
-        content_type = "Exclusive Short"
-    if normalize_str(record.get(AT_FIELDS["content_type"])) == "Vertical Short":
-        content_type = "Vertical Short"
+    if normalize_str(record.get(AT_FIELDS["content_type"])) in {"Editorial Short", "Exclusive"}: content_type = "Exclusive Short"
+    if normalize_str(record.get(AT_FIELDS["content_type"])) == "Vertical Short": content_type = "Vertical Short"
 
     safe_set_value(ws, layout["property_row"], col, single["property"], alignment=center_wrap())
     safe_set_value(ws, layout["content_type_row"], col, content_type, alignment=center_wrap())
@@ -161,12 +146,9 @@ def write_djr_asset_to_col(ws, layout, col, record):
     safe_set_value(ws, layout["synopsis_row"], col, single["synopsis"], alignment=center_wrap())
     
     strat_val = record.get("fields", record).get(AT_FIELDS["strategy"])
-    if isinstance(strat_val, list):
-        actual_strategy = " / ".join(normalize_str(s) for s in strat_val if normalize_str(s))
-    else:
-        actual_strategy = normalize_str(strat_val)
+    if isinstance(strat_val, list): actual_strategy = " / ".join(normalize_str(s) for s in strat_val if normalize_str(s))
+    else: actual_strategy = normalize_str(strat_val)
     safe_set_value(ws, layout["strategy_row"], col, actual_strategy, alignment=center_wrap())
-    
     safe_set_value(ws, layout["tx_row"], col, single["tx"], alignment=center_wrap())
     safe_set_value(ws, layout["tc_row"], col, single["tc"], alignment=center_wrap())
     write_djr_branding(ws, layout, col, record)
@@ -178,11 +160,9 @@ def write_djr_asset_to_col(ws, layout, col, record):
         policy = fields.get("Rights Management Policy")
         policy_str = str(policy).strip() if policy else ""
         extra_note = ""
-        
         if "Block AUS/NZ" in policy_str: extra_note = "\n\n⚠️ **Rights Policy:** Block AUS/NZ/TAIWAN/CHINA/HONG KONG - Monetize everywhere else"
         elif "Monetize Locally" in policy_str: extra_note = "\n\n⚠️ **Rights Policy:** Monetize Locally (Geo-block)"
         elif "Block Everywhere" in policy_str: extra_note = "\n\n🚫 **Rights Policy:** Block Everywhere / Do Not Monetize"
-            
         comments_text = single["comments"] + extra_note
         safe_set_value(ws, comments_row, col, markdown_to_richtext(comments_text), alignment=center_wrap())
 
@@ -196,42 +176,40 @@ def write_djr_deadline(ws, layout, day_name, records):
     cell.alignment = center_wrap()
     cell.number_format = "dd-mmm-yy"
 
+# --- 🚀 FIX CRÍTICO: Ahora extrae correctamente los fields ---
 def collect_included_countries_djr(record, channel_id_to_name_map=None):
-    region_raw = record.get(AT_FIELDS["region"])
+    f = record.get("fields", record)
+    region_raw = f.get(AT_FIELDS["region"])
     region_str = str(region_raw).lower()
     
-    if "spain only" in region_str:
-        return {"Spain"}
+    if "spain only" in region_str: return {"Spain"}
         
     included = set()
     if region_raw:
         r_items = [lower_clean(x) for x in region_raw] if isinstance(region_raw, list) else [x.strip().lower() for x in str(region_raw).replace("[", "").replace("]", "").replace("'", "").replace('"', "").split(",") if x.strip()]
         for item in r_items:
-            if item in DJR_REGION_PRESETS:
-                included |= set(DJR_REGION_PRESETS[item])
+            if item in DJR_REGION_PRESETS: included |= set(DJR_REGION_PRESETS[item])
                 
     if not included:
         dc_included, _ = collect_included_countries(
-            youtube_channel=record.get(AT_FIELDS["youtube_channel"]),
+            youtube_channel=f.get(AT_FIELDS["youtube_channel"]),
             region=region_raw,
-            notes=record.get(AT_FIELDS["notes"]),
+            notes=f.get(AT_FIELDS["notes"]),
             excluded_markets=None,
             channel_id_to_name_map=channel_id_to_name_map,
         )
         included = {DC_TO_DJR_COUNTRY.get(c, c) for c in dc_included}
         
-    ex_raw = record.get(AT_FIELDS["excluded_markets"])
+    ex_raw = f.get(AT_FIELDS["excluded_markets"])
     if ex_raw:
         ex_items = [lower_clean(x) for x in ex_raw] if isinstance(ex_raw, list) else [x.strip().lower() for x in str(ex_raw).split(",") if x.strip()]
         to_remove = set()
         for c in included:
             c_lower = c.lower() if isinstance(c, str) else ""
             for ex in ex_items:
-                if ex in c_lower:
-                    to_remove.add(c)
+                if ex in c_lower: to_remove.add(c)
                 for dc_k, dc_v in DC_TO_DJR_COUNTRY.items():
-                    if dc_v == c and ex in dc_k.lower():
-                        to_remove.add(c)
+                    if dc_v == c and ex in dc_k.lower(): to_remove.add(c)
         included -= to_remove
         
     return included
@@ -270,9 +248,7 @@ def write_djr_country_rollout(ws, layout, column_map, record, col, channel_id_to
 def rebuild_djr_week_merges(ws, layout):
     rows_to_rebuild = [layout["date_row"], layout["deadline_row"]]
     for cr in list(ws.merged_cells.ranges):
-        if cr.min_row == cr.max_row and cr.min_row in rows_to_rebuild:
-            ws.unmerge_cells(str(cr))
-
+        if cr.min_row == cr.max_row and cr.min_row in rows_to_rebuild: ws.unmerge_cells(str(cr))
     for day_name in DAY_ORDER:
         cols = [col for _, col in DJR_DAY_LAYOUT[day_name]]
         start_col, end_col = min(cols), max(cols)
@@ -285,12 +261,10 @@ def shade_djr_out_of_month_days(ws, first_monday, target_year, target_month):
         week_monday = first_monday + timedelta(days=(week_index - 1) * 7)
         for idx, day_name in enumerate(DAY_ORDER):
             current_date = week_monday + timedelta(days=idx)
-            if current_date.year == target_year and current_date.month == target_month:
-                continue
+            if current_date.year == target_year and current_date.month == target_month: continue
             cols = [col for _, col in DJR_DAY_LAYOUT[day_name]]
             for row in range(layout["owner_row"], layout["status_comments_row"] + 1):
-                for col in cols:
-                    ws.cell(row=row, column=col).fill = fill
+                for col in cols: ws.cell(row=row, column=col).fill = fill
 
 def set_djr_column_widths(ws):
     for day_name in DAY_ORDER:
@@ -300,19 +274,13 @@ def set_djr_column_widths(ws):
         ws.column_dimensions[get_column_letter(all_cols[2])].width = 35
         ws.column_dimensions[get_column_letter(all_cols[3])].width = 10
 
-def set_djr_row_heights(ws):
-    pass
+def set_djr_row_heights(ws): pass
 
-
-# --- NUEVO: Exportar ID's (Overon Tracking) ---
 def export_overon_ids(wb, records):
     sheet_name = "ID's"
-    if sheet_name not in wb.sheetnames:
-        return
-
+    if sheet_name not in wb.sheetnames: return
     ws_ids = wb[sheet_name]
     current_row = 4
-
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
     thin_border = Border(left=Side(style='thin', color="000000"), right=Side(style='thin', color="000000"), top=Side(style='thin', color="000000"), bottom=Side(style='thin', color="000000"))
@@ -323,14 +291,11 @@ def export_overon_ids(wb, records):
         cell.value = val
         cell.border = thin_border
         cell.alignment = align
-        if is_header:
-            cell.fill = header_fill
-            cell.font = Font(bold=True)
+        if is_header: cell.fill = header_fill; cell.font = Font(bold=True)
 
     def _apply_merged_border(ws, r_start, c_start, r_end, c_end):
         for r in range(r_start, r_end + 1):
-            for c in range(c_start, c_end + 1):
-                ws.cell(row=r, column=c).border = thin_border
+            for c in range(c_start, c_end + 1): ws.cell(row=r, column=c).border = thin_border
 
     valid_records = []
     for r in records:
@@ -390,11 +355,9 @@ def export_overon_ids(wb, records):
             sub_titles_from_notes = [line.strip() for line in notes.split('\n') if line.strip() and "compile" not in line.lower() and "reuse" not in line.lower()]
             current_sub = sub_titles_from_notes[0] if sub_titles_from_notes else "Part 1"
             tc_idx = 0
-            
             if tx_lines:
                 for tx_val in tx_lines:
-                    if "INTL" not in tx_val.upper() and "ILJ" not in tx_val.upper() and "http" not in tx_val.lower() and len(tx_val) > 12:
-                        current_sub = tx_val
+                    if "INTL" not in tx_val.upper() and "ILJ" not in tx_val.upper() and "http" not in tx_val.lower() and len(tx_val) > 12: current_sub = tx_val
                     else:
                         tcin_val = tcin_lines[tc_idx] if tc_idx < len(tcin_lines) else ""
                         tcout_val = tcout_lines[tc_idx] if tc_idx < len(tcout_lines) else ""
@@ -403,8 +366,7 @@ def export_overon_ids(wb, records):
             else:
                 if sub_titles_from_notes:
                     for sub in sub_titles_from_notes: parsed_items.append({"sub": sub, "tx": "", "in": "", "out": ""})
-                else:
-                    parsed_items.append({"sub": notes, "tx": "", "in": "", "out": ""})
+                else: parsed_items.append({"sub": notes, "tx": "", "in": "", "out": ""})
         else:
             num_items = max(len(tx_lines), len(tcin_lines), len(tcout_lines), len(cd_lines), 1)
             for i in range(num_items):
@@ -420,13 +382,11 @@ def export_overon_ids(wb, records):
         
         for i, h in enumerate(headers): _write_cell(ws_ids, current_row, 2 + i, h, is_header=True)
         _write_cell(ws_ids, current_row, 1, "", is_header=True)
-        
         current_row += 1
         
         if is_4_cols:
             grouped = defaultdict(list)
             for item in parsed_items: grouped[item["sub"]].append(item)
-                
             for sub, items in grouped.items():
                 start_b = current_row
                 for item in items:
@@ -436,7 +396,6 @@ def export_overon_ids(wb, records):
                     _write_cell(ws_ids, current_row, 4, item["in"])
                     _write_cell(ws_ids, current_row, 5, item["out"])
                     current_row += 1
-                
                 if current_row - 1 > start_b:
                     ws_ids.merge_cells(start_row=start_b, start_column=2, end_row=current_row-1, end_column=2)
                     _apply_merged_border(ws_ids, start_b, 2, current_row-1, 2)
@@ -450,21 +409,16 @@ def export_overon_ids(wb, records):
                 current_row += 1
                 
         if current_row - 1 >= start_merge_a:
-            if current_row - 1 > start_merge_a:
-                ws_ids.merge_cells(start_row=start_merge_a, start_column=1, end_row=current_row-1, end_column=1)
+            if current_row - 1 > start_merge_a: ws_ids.merge_cells(start_row=start_merge_a, start_column=1, end_row=current_row-1, end_column=1)
             _apply_merged_border(ws_ids, start_merge_a, 1, current_row-1, 1)
             c_a = ws_ids.cell(row=start_merge_a, column=1)
             c_a.value = f"{activity_name} {date_str}"
             c_a.alignment = align_center
-            
         current_row += 1 
 
-# --- NUEVO: Exportar Metadata Programming Spain ---
 def export_metadata_spain(wb, records, first_monday):
     sheet_name = "Metadata Programming Spain"
-    if sheet_name not in wb.sheetnames:
-        return
-
+    if sheet_name not in wb.sheetnames: return
     ws_meta = wb[sheet_name]
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     font_green = Font(color="00B050", bold=True)
@@ -482,16 +436,13 @@ def export_metadata_spain(wb, records, first_monday):
         cell_b3.alignment = align_center
         cell_b3.number_format = "mmm-yy"
 
-    # Inyección de la fecha en D7 preservando el diseño
     cell_d7 = ws_meta.cell(row=7, column=4)
     cell_d7.value = first_monday
     cell_d7.alignment = align_center
     cell_d7.number_format = "dd-mmm-yy"
 
-    try: 
-        ws_meta.unmerge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
-    except: 
-        pass
+    try: ws_meta.unmerge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
+    except: pass
     ws_meta.merge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
 
     META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
@@ -513,13 +464,10 @@ def export_metadata_spain(wb, records, first_monday):
             is_target_month = (current_date.month == target_month)
             active_fill = fill_white if is_target_month else fill_grey
             
-            # Ajuste de coordenadas del fill: De Property (+3) a Strategy (+7)
             for r in range(start_row + 3, start_row + 8):
-                for c in range(start_col, end_col + 1):
-                    ws_meta.cell(row=r, column=c).fill = active_fill
+                for c in range(start_col, end_col + 1): ws_meta.cell(row=r, column=c).fill = active_fill
             
             day_records = buckets.get((week_index, day_name, "Programming"), [])
-
             for i, record in enumerate(day_records[:len(day_cols)]):
                 col = day_cols[i]
                 f = record.get("fields", record)
@@ -528,7 +476,6 @@ def export_metadata_spain(wb, records, first_monday):
                 es_title = normalize_str(f.get("ES Title", ""))
                 es_desc = normalize_str(f.get("ES Description", ""))
 
-                # Desplazamiento exacto corregido (-1 celda arriba)
                 safe_set_value(ws_meta, start_row + 2, col, "PROGRAMMING HUB", alignment=align_center)
                 safe_set_value(ws_meta, start_row + 3, col, single["property"], alignment=align_center)
                 safe_set_value(ws_meta, start_row + 4, col, single["content_type"], alignment=align_center)
@@ -537,15 +484,10 @@ def export_metadata_spain(wb, records, first_monday):
                 safe_set_value(ws_meta, start_row + 7, col, single["strategy"], alignment=align_center)
 
 def populate_calendar_djr(
-    template_path: str,
-    output_path: str,
-    records: list,
-    enable_mediaplanning: bool = True,
-    channel_id_to_name_map: dict | None = None,
+    template_path: str, output_path: str, records: list,
+    enable_mediaplanning: bool = True, channel_id_to_name_map: dict | None = None,
 ):
-    print("ENTERED populate_calendar_djr")
     if channel_id_to_name_map is None: channel_id_to_name_map = {}
-
     wb = load_workbook(template_path, data_only=False)
     if DJR_TARGET_SHEET not in wb.sheetnames: raise RuntimeError(f"Target sheet '{DJR_TARGET_SHEET}' not found in workbook.")
     ws = wb[DJR_TARGET_SHEET]
@@ -585,22 +527,17 @@ def populate_calendar_djr(
         rebuild_djr_week_merges(ws, layout)
 
     target_year, target_month = resolve_target_month_year(records)
-    if first_monday and target_year and target_month:
-        shade_djr_out_of_month_days(ws, first_monday, target_year, target_month)
+    if first_monday and target_year and target_month: shade_djr_out_of_month_days(ws, first_monday, target_year, target_month)
 
     set_djr_row_heights(ws)
-
     export_overon_ids(wb, records)
     export_metadata_spain(wb, records, first_monday)
 
-    try:
-        populate_monthly_overview_djr(wb=wb, records=records, enable_mediaplanning=enable_mediaplanning, channel_id_to_name_map=channel_id_to_name_map)
-    except Exception as e:
-        pass
+    try: populate_monthly_overview_djr(wb=wb, records=records, enable_mediaplanning=enable_mediaplanning, channel_id_to_name_map=channel_id_to_name_map)
+    except Exception as e: pass
 
     out_dir = os.path.dirname(output_path)
     if out_dir: os.makedirs(out_dir, exist_ok=True)
-
     cleanup_stale_merged_cells(ws)
     wb.template = False
 

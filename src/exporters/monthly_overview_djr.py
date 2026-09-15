@@ -81,8 +81,6 @@ def get_episode_category(record):
 
 def get_djr_overview_region_text(record):
     region_text = normalize_overview_region(record.get(AT_FIELDS["region"]))
-
-    # Cosmetic DJR cleanup
     region_text = region_text.replace("TIER A, B & C", "TIER A, B, C")
     return region_text
 
@@ -109,7 +107,6 @@ def build_djr_overview_text(record, target_country=None):
     
     region = "" if target_country else get_djr_overview_region_text(record)
     
-    # --- EVALUACIÓN DE POLÍTICA DE DERECHOS ---
     fields = record.get("fields", record)
     policy_val = fields.get("Rights Management Policy")
     policy_str = str(policy_val).strip() if policy_val else ""
@@ -153,41 +150,27 @@ def build_djr_overview_text(record, target_country=None):
     return f"{prop}\n{region}{gf_suffix}".strip()
 
 def get_djr_overview_bucket(content_type):
-    if content_type == "Full Episode":
-        return "full_eps"
-    if content_type in {"Exclusive", "Editorial Short"}:
-        return "exclusive"
-    if content_type in {"Lift", "Musical Lift", "Magical Moment"}:
-        return "lifts"
-    if content_type == "Compilation":
-        return "compilations"
-    if content_type == "Live Stream":
-        return "live"
-    if content_type == "Podcast":
-        return "podcast"
-    if content_type == "Vertical Short":
-        return "vertical"
+    if content_type == "Full Episode": return "full_eps"
+    if content_type in {"Exclusive", "Editorial Short"}: return "exclusive"
+    if content_type in {"Lift", "Musical Lift", "Magical Moment"}: return "lifts"
+    if content_type == "Compilation": return "compilations"
+    if content_type == "Live Stream": return "live"
+    if content_type == "Podcast": return "podcast"
+    if content_type == "Vertical Short": return "vertical"
     return None
-
 
 def append_to_cell(cell, text):
     existing = normalize_str(cell.value)
-    if existing:
-        cell.value = f"{existing}\n\n— — —\n\n{text}"
-    else:
-        cell.value = text
-
+    if existing: cell.value = f"{existing}\n\n— — —\n\n{text}"
+    else: cell.value = text
 
 def write_djr_overview_regular_cell(ws, row, col, text, bucket):
     cell = get_writable_cell(ws, row, col)
     append_to_cell(cell, text)
     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
     cell.font = Font(bold=True, color="FF000000")
-
     fill_color = DJR_OVERVIEW_FILL_COLORS.get(bucket)
-    if fill_color:
-        cell.fill = PatternFill(fill_type="solid", fgColor=fill_color)
-
+    if fill_color: cell.fill = PatternFill(fill_type="solid", fgColor=fill_color)
 
 def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_row, bottom_row = layout["vertical_rows"]
@@ -208,8 +191,7 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
 
     if target_country:
         bottom_cell.value = None
-        try:
-            ws.merge_cells(start_row=top_row, start_column=col, end_row=bottom_row, end_column=col)
+        try: ws.merge_cells(start_row=top_row, start_column=col, end_row=bottom_row, end_column=col)
         except Exception: pass
     else:
         bottom_cell.value = bottom_text
@@ -220,41 +202,29 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
 def write_djr_overview_header(ws, records):
     month_name = month_name_from_records(records)
 
-    title_cell = get_writable_cell(ws, 5, 2)  # B5:J5
+    title_cell = get_writable_cell(ws, 5, 2)
     existing = normalize_str(title_cell.value)
-
-    if existing:
-        title_cell.value = existing.replace("MONTH", month_name)
-    else:
-        title_cell.value = f"DJR EMEA YT {month_name} 2026 CALENDAR"
-
+    if existing: title_cell.value = existing.replace("MONTH", month_name)
+    else: title_cell.value = f"DJR EMEA YT {month_name} 2026 CALENDAR"
     title_cell.alignment = center_wrap()
 
     first_monday = first_visible_monday_of_target_month(records)
     if first_monday:
-        date_cell = get_writable_cell(ws, 9, 4)  # D9
+        date_cell = get_writable_cell(ws, 9, 4)
         date_cell.value = first_monday
         date_cell.number_format = "dd-mmm"
         date_cell.alignment = center_wrap()
 
     return first_monday
 
-
 def auto_adjust_djr_overview_heights(ws):
     for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
         rows = [
-            layout["full_eps"],
-            layout["exclusive"],
-            layout["lifts"],
-            layout["compilations"],
-            layout["live"],
-            *layout["podcast_rows"],
-            *layout["vertical_rows"],
+            layout["full_eps"], layout["exclusive"], layout["lifts"],
+            layout["compilations"], layout["live"], *layout["podcast_rows"], *layout["vertical_rows"],
         ]
-
         for row in rows:
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 42)
-
 
 import re
 
@@ -267,25 +237,20 @@ def is_country_match(target_country: str, included_list: set) -> bool:
     return False
 
 def populate_monthly_overview_djr(
-    wb,
-    records,
-    enable_mediaplanning=True,
-    channel_id_to_name_map=None,
-    target_country=None 
+    wb, records, enable_mediaplanning=True,
+    channel_id_to_name_map=None, target_country=None 
 ):
     if DJR_MONTHLY_OVERVIEW_SHEET not in wb.sheetnames: return
     ws = wb[DJR_MONTHLY_OVERVIEW_SHEET]
 
     if target_country:
         from openpyxl.styles import PatternFill
-        # 1. Purga total del texto residual del Master
         for col in range(4, 11):
             for row in range(10, 80):
                 cell = ws.cell(row=row, column=col)
                 cell.value = None
                 cell.fill = PatternFill(fill_type=None)
                 
-            # 2. Eliminar celdas combinadas residuales para empezar en limpio
             for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
                 try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
                 except: pass
@@ -301,8 +266,9 @@ def populate_monthly_overview_djr(
             
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
+            # MAGIA DEL FILTRO: Se pasan los fields en lugar del rec completo
             included = collect_included_countries_djr(
-                record=rec, 
+                record=fields, 
                 channel_id_to_name_map=channel_id_to_name_map
             )
             
@@ -343,5 +309,4 @@ def populate_monthly_overview_djr(
         write_djr_overview_regular_cell(ws, row, col, text, bucket)
 
     auto_adjust_djr_overview_heights(ws)
-
     logging.info(f"Finished populating '{DJR_MONTHLY_OVERVIEW_SHEET}'.")

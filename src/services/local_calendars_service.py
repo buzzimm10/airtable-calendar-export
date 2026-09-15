@@ -107,7 +107,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         country_wb = load_workbook(master_path, data_only=False)
         clean_country = get_clean_country_name(country)
         
-        # 1. PURGA DE PESTAÑAS BASURA (Incluye Sheet 1)
+        # 1. PURGA DE PESTAÑAS BASURA (Sheet 1, IDs, Metadata)
         for sn in list(country_wb.sheetnames):
             sn_lower = sn.lower()
             if "compilation" in sn_lower or "sheet 1" in sn_lower or "sheet1" in sn_lower or "id's" in sn_lower or "metadata" in sn_lower:
@@ -168,7 +168,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if isinstance(djr_tc, int) and djr_tc > max_content_row:
                     max_content_row = djr_tc
                 
-                # Rescatar 3 filas (Used or Not, Link, y el respiro en blanco)
                 candidate_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if r > my_rollout_row]
                 if len(candidate_rows) < 3:
                     status_start = layout.get("status_rows", [0])[0]
@@ -243,7 +242,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     except:
                         pass
 
-                    # Rescatar 3 filas (Used or Not, Link, y el respiro en blanco)
                     candidate_rows = [r for r in block.rollout_country_rows.values() if r > country_row_rollout]
                     if len(candidate_rows) < 3:
                         candidate_rows.extend([r for r in block.status_country_rows.values() if r > country_row_rollout])
@@ -297,7 +295,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
 
         # ---------------- LA FILA BLANCA PERFECTA ENTRE SEMANAS ----------------
         for r in range(5, current_max_row + 1):
-            if get_val(ws, r, 2).startswith("week "):
+            if get_val(ws, r, 2).startswith("week"):
                 prev_r = r - 1
                 safe_rows.add(r)
                 safe_rows.add(prev_r)
@@ -318,7 +316,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         
         standard_headers = [
             "deadline for delivery", "owner", "property", 
-            "content type", "title", "synopsis", "planning strategy"
+            "content type", "asset", "title", "synopsis", "planning strategy"
         ]
 
         for r in range(1, sniper_limit):
@@ -328,7 +326,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             val_d = get_val(ws, r, 4)
             combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
             
-            if any(h in combined_val for h in standard_headers) or val_b.startswith("week "):
+            # Solo buscar en header_val para evitar falsos positivos con títulos como "Ladybug"
+            header_val = val_a + " " + val_b 
+            
+            if any(h in combined_val for h in standard_headers) or val_b.startswith("week"):
                 safe_rows.add(r)
                 in_junk_section = False
 
@@ -336,7 +337,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 in_junk_section = False
                 continue
             
-            if any(x in combined_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in"]):
+            if any(x in header_val for x in ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in"]):
                 in_junk_section = True
 
             if in_junk_section:

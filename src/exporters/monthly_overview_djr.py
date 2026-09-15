@@ -109,7 +109,7 @@ def build_djr_overview_text(record, target_country=None):
     
     region = "" if target_country else get_djr_overview_region_text(record)
     
-    # --- EVALUACIÓN DE POLÍTICA DE DERECHOS (NEW) ---
+    # --- EVALUACIÓN DE POLÍTICA DE DERECHOS ---
     fields = record.get("fields", record)
     policy_val = fields.get("Rights Management Policy")
     policy_str = str(policy_val).strip() if policy_val else ""
@@ -278,12 +278,19 @@ def populate_monthly_overview_djr(
 
     if target_country:
         from openpyxl.styles import PatternFill
-        for week_num, layout in DJR_OVERVIEW_WEEK_LAYOUT.items():
-            for row in list(range(layout["date_row"] + 1, layout.get("vertical_rows", [0])[-1] + 1)):
-                for col in range(4, 11):
-                    c = get_writable_cell(ws, row, col)
-                    c.value = None
-                    c.fill = PatternFill(fill_type=None)
+        # 1. Purga total del texto residual del Master
+        for col in range(4, 11):
+            for row in range(10, 80):
+                cell = ws.cell(row=row, column=col)
+                cell.value = None
+                cell.fill = PatternFill(fill_type=None)
+                
+            # 2. Eliminar celdas combinadas residuales para empezar en limpio
+            for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
+                try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
+                except: pass
+                try: ws.unmerge_cells(start_row=layout["podcast_rows"][0], start_column=col, end_row=layout["podcast_rows"][1], end_column=col)
+                except: pass
 
     first_monday = write_djr_overview_header(ws, records) 
     if not first_monday: return
@@ -293,7 +300,6 @@ def populate_monthly_overview_djr(
         if asset_is_event(fields): continue
             
         if target_country:
-            # FILTRO DJR INTELIGENTE IMPORTADO DE FULL_CALENDAR_DJR
             from exporters.full_calendar_djr import collect_included_countries_djr
             included = collect_included_countries_djr(
                 record=rec, 

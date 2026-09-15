@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from datetime import timedelta
 
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border
 from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import Cell
 
@@ -78,6 +78,7 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
+    # Si es calendario local, ignoramos la región para que no imprima TIER
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -217,22 +218,22 @@ def populate_monthly_overview_djr(
     ws = wb[overview_sheet_name]
 
     if target_country:
-        from openpyxl.styles import PatternFill
-        # EL BYPASS: Solo borramos instancias seguras para no colisionar con MergedCells
+        # BOMBA DE VACÍO: Descombina y limpia todo el lienzo antes de dibujar lo local
+        merges = list(ws.merged_cells.ranges)
+        for m in merges:
+            if 4 <= m.min_col <= 10 and 9 <= m.min_row <= 120:
+                try: ws.unmerge_cells(str(m))
+                except: pass
+                
         for col in range(4, 11):
-            for row in range(5, 100):
+            for row in range(9, 120):
                 cell = ws.cell(row=row, column=col)
                 if isinstance(cell, Cell):
                     try:
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
+                        cell.border = Border()
                     except: pass
-                
-            for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
-                try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
-                except: pass
-                try: ws.unmerge_cells(start_row=layout["podcast_rows"][0], start_column=col, end_row=layout["podcast_rows"][1], end_column=col)
-                except: pass
 
     first_monday = write_djr_overview_header(ws, records) 
     if not first_monday: return

@@ -17,7 +17,6 @@ from config.layouts_djr import DJR_WEEK_LAYOUT as djr_layout
 from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
 
-
 def get_clean_country_name(name: str) -> str:
     return re.sub(r'\s*\(.*?\)', '', name).strip()
 
@@ -48,12 +47,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
 
-    # El color gris exacto y blanco
     fill_grey = PatternFill(fill_type="solid", fgColor="BFBFBF")
     fill_white = PatternFill(fill_type="solid", fgColor="FFFFFF")
     font_bold = Font(bold=True, color="000000")
 
-    # Definición de bordes
     thin_side = Side(border_style="thin", color="000000")
     thick_side = Side(border_style="medium", color="000000") 
     
@@ -65,7 +62,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         
         applied_border = border_thick_bottom if is_last else border_normal
 
-        # Limpiar A y C de forma segura
         cell_a = sheet.cell(row=row_idx, column=1)
         if isinstance(cell_a, Cell): cell_a.value = None
         cell_c = sheet.cell(row=row_idx, column=3)
@@ -75,7 +71,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 20  
         
-        # Aplicar estilos, colores y BORDES (Limitado hasta la columna 32 = AE)
         for c in range(2, 32): 
             cell = sheet.cell(row=row_idx, column=c)
             if c >= 3 and isinstance(cell, Cell):
@@ -104,7 +99,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].height = 60 if is_tx else 35 
         for c in range(4, 32):
             cell = sheet.cell(row=row_idx, column=c)
-            if isinstance(cell, Cell): # Alineación solo a celdas reales
+            if isinstance(cell, Cell): 
                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
     for country in selected_countries:
@@ -112,9 +107,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         country_wb = load_workbook(master_path, data_only=False)
         clean_country = get_clean_country_name(country)
         
-        # 1. EXCLUIR PESTAÑAS NO DESEADAS EN LOCAL CALENDARS
-        for sn in country_wb.sheetnames:
-            if "compilation" in sn.lower() or sn in ["Sheet 1", "ID's", "Metadata Programming Spain"]: 
+        # 1. PURGA DE PESTAÑAS BASURA (Incluye Sheet 1)
+        for sn in list(country_wb.sheetnames):
+            sn_lower = sn.lower()
+            if "compilation" in sn_lower or "sheet 1" in sn_lower or "sheet1" in sn_lower or "id's" in sn_lower or "metadata" in sn_lower:
                 del country_wb[sn]
             
         if sheet_name not in country_wb.sheetnames:
@@ -172,19 +168,30 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 if isinstance(djr_tc, int) and djr_tc > max_content_row:
                     max_content_row = djr_tc
                 
+                # Rescatar 3 filas (Used or Not, Link, y el respiro en blanco)
                 candidate_rows = [r for r in range(rollout_start, rollout_start + len(master_countries)) if r > my_rollout_row]
-                if len(candidate_rows) < 2:
+                if len(candidate_rows) < 3:
                     status_start = layout.get("status_rows", [0])[0]
                     candidate_rows.extend([r for r in range(status_start, status_start + 30) if r > my_rollout_row])
                 
                 candidate_rows = sorted(list(set(candidate_rows)))
-                if len(candidate_rows) >= 2:
+                if len(candidate_rows) >= 3:
                     used_row = candidate_rows[0]
                     link_row = candidate_rows[1]
+                    blank_row = candidate_rows[2]
+                    
                     style_recycled_row(ws, used_row, "USED OR NOT", fill_grey, is_last=False)
                     style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white, is_last=True)
-                    safe_rows.add(used_row)
-                    safe_rows.add(link_row)
+                    
+                    ws.row_dimensions[blank_row].hidden = False
+                    ws.row_dimensions[blank_row].height = 15
+                    for c in range(1, 32):
+                        cell = ws.cell(row=blank_row, column=c)
+                        if isinstance(cell, Cell): cell.value = None
+                        cell.fill = PatternFill(fill_type=None)
+                        cell.border = Border()
+                        
+                    safe_rows.update([used_row, link_row, blank_row])
 
                 for day in DAY_ORDER:
                     for role, col in djr_day[day]:
@@ -236,18 +243,29 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     except:
                         pass
 
+                    # Rescatar 3 filas (Used or Not, Link, y el respiro en blanco)
                     candidate_rows = [r for r in block.rollout_country_rows.values() if r > country_row_rollout]
-                    if len(candidate_rows) < 2:
+                    if len(candidate_rows) < 3:
                         candidate_rows.extend([r for r in block.status_country_rows.values() if r > country_row_rollout])
                     
                     candidate_rows = sorted(list(set(candidate_rows)))
-                    if len(candidate_rows) >= 2:
+                    if len(candidate_rows) >= 3:
                         used_row = candidate_rows[0]
                         link_row = candidate_rows[1]
+                        blank_row = candidate_rows[2]
+                        
                         style_recycled_row(ws, used_row, "USED OR NOT", fill_grey, is_last=False)
                         style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white, is_last=True)
-                        safe_rows.add(used_row)
-                        safe_rows.add(link_row)
+                        
+                        ws.row_dimensions[blank_row].hidden = False
+                        ws.row_dimensions[blank_row].height = 15
+                        for c in range(1, 32):
+                            cell = ws.cell(row=blank_row, column=c)
+                            if isinstance(cell, Cell): cell.value = None
+                            cell.fill = PatternFill(fill_type=None)
+                            cell.border = Border()
+                            
+                        safe_rows.update([used_row, link_row, blank_row])
 
                 dc_tc = block.tc_row
                 if isinstance(dc_tc, int) and dc_tc > max_content_row:

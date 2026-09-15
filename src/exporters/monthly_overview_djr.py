@@ -78,7 +78,7 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
-    # Si es calendario local, no imprimirá ninguna región ni el bloque de TIER
+    # Si es un país local, NUNCA imprime los Tiers debajo del título
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -93,7 +93,6 @@ def build_djr_overview_text(record, target_country=None):
     ep = get_episode_number(record)
 
     def _join_parts(*args):
-        # Esta función elimina inteligentemente cualquier salto de línea extra que antes dejaba el "Tier"
         return "\n".join(str(a).strip() for a in args if str(a).strip())
 
     if content_type == "Full Episode":
@@ -202,7 +201,8 @@ def is_country_match(target_country: str, included_list: set) -> bool:
     if not target_country: return True
     target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
     for c in included_list:
-        if target_clean == re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper():
+        c_clean = re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper()
+        if target_clean == c_clean or target_clean in c_clean or c_clean in target_clean:
             return True
     return False
 
@@ -221,31 +221,31 @@ def populate_monthly_overview_djr(
 
     if target_country:
         from openpyxl.styles import PatternFill
+        from openpyxl.cell.cell import Cell
         
-        # FIX DEFINITIVO DE LIMPIEZA: Descombina toda el área del calendario (filas 9 a 70, columnas 4 a 10)
-        # Esto soluciona que la información máster (como los Tiers) se quedara atascada y apareciera apilada.
+        # 1. Extraemos las filas exactas donde están las fechas, para Protegerlas.
+        date_rows = [layout["date_row"] for layout in DJR_OVERVIEW_WEEK_LAYOUT.values()]
+        
+        # 2. Descombinamos todas las celdas de las columnas D a J, excepto las filas de fechas.
         ranges_to_unmerge = []
         for m in list(ws.merged_cells.ranges):
-            if 4 <= m.min_col <= 10 and m.min_row >= 9:
-                ranges_to_unmerge.append(m)
+            if 4 <= m.min_col <= 10 and 9 <= m.min_row <= 70:
+                if m.min_row not in date_rows:
+                    ranges_to_unmerge.append(m)
         for m in ranges_to_unmerge:
             try: ws.unmerge_cells(str(m))
             except: pass
             
-        for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
-            rows_to_clear = [
-                layout["full_eps"], layout["exclusive"], layout["lifts"],
-                layout["compilations"], layout["live"], 
-                layout["podcast_rows"][0], layout["podcast_rows"][1],
-                layout["vertical_rows"][0], layout["vertical_rows"][1]
-            ]
-            for col in range(4, 11):
-                for r in rows_to_clear:
-                    try:
-                        cell = ws.cell(row=r, column=col)
+        # 3. Vaciado táctico. Borramos TODOS los rastros de texto y color del Master EMEA.
+        for r in range(9, 70):
+            if r in date_rows: continue # ¡Prohibido tocar las fechas!
+            for c in range(4, 11):
+                try:
+                    cell = ws.cell(row=r, column=c)
+                    if isinstance(cell, Cell):
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
-                    except: pass
+                except: pass
 
     first_monday = write_djr_overview_header(ws, records) 
     if not first_monday: return
@@ -257,6 +257,8 @@ def populate_monthly_overview_djr(
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
             included = collect_included_countries_djr(record=rec, channel_id_to_name_map=channel_id_to_name_map)
+            
+            # Si el contenido no pertenece a Rumanía (o al país actual), se ignora completamente.
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))

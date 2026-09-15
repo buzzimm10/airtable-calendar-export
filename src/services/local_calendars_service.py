@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 from datetime import datetime
 from openpyxl.cell.cell import Cell, MergedCell
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 from config.layouts import TARGET_SHEET as dc_sheet_name
 from config.countries import SHEET_COUNTRIES as dc_master_countries
@@ -65,7 +66,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if isinstance(cell_c, Cell): cell_c.value = None
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 30  # Altura ampliada
+        sheet.row_dimensions[row_idx].height = 30  
         for c in range(2, 32): 
             cell = sheet.cell(row=row_idx, column=c)
             if c >= 3 and isinstance(cell, Cell): cell.value = None
@@ -114,6 +115,14 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
 
         ws.column_dimensions['AG'].hidden = True
         ws.column_dimensions['AF'].hidden = True
+
+        # FIX ANCHURA: Le damos más anchura (22) a la columna de YT TEAM UK (Slot 4)
+        if is_djr:
+            for day in DAY_ORDER:
+                day_cols = sorted([col for _, col in djr_day[day]])
+                if len(day_cols) >= 4:
+                    uk_col_letter = get_column_letter(day_cols[3])
+                    ws.column_dimensions[uk_col_letter].width = 22
 
         if records:
             if is_djr:
@@ -278,9 +287,14 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 safe_rows.add(r)
                 in_junk_section = False
                 
-                # FIX ALTURA: Protege e impone una altura mínima a cabeceras estandar como las de la fila 196
+                # FIX ALTURA AVANZADO: Detecta Title y Synopsis y les da alturas extra grandes en todo el documento
                 if "week" not in header_col_text:
-                    ws.row_dimensions[r].height = 35 
+                    if "title" in header_col_text:
+                        ws.row_dimensions[r].height = 50
+                    elif "synopsis" in header_col_text:
+                        ws.row_dimensions[r].height = 85
+                    else:
+                        ws.row_dimensions[r].height = 35 
 
                 continue
 

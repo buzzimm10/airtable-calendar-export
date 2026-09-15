@@ -1,4 +1,5 @@
 import logging
+import re
 from collections import defaultdict
 from datetime import timedelta
 
@@ -67,7 +68,6 @@ def get_episode_number(record):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     source = f"{activity} {title}"
-    import re
     match = re.search(r"\b(?:ep|episode|episodio)\.?\s*(\d+)", source, re.I)
     if match: return match.group(1)
     return ""
@@ -78,7 +78,7 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
-    # Si es calendario local, no imprime el bloque de TIER
+    # Si es calendario local, no imprimirá ninguna región ni el bloque de TIER
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -92,15 +92,19 @@ def build_djr_overview_text(record, target_country=None):
 
     ep = get_episode_number(record)
 
+    def _join_parts(*args):
+        # Esta función elimina inteligentemente cualquier salto de línea extra que antes dejaba el "Tier"
+        return "\n".join(str(a).strip() for a in args if str(a).strip())
+
     if content_type == "Full Episode":
         ep_text = f" ep. {ep}" if ep else ""
         line1 = f"{prop}{ep_text} {title}".strip()
         line2 = get_episode_category(record)
-        return f"{line1}{gf_suffix}\n{line2}\n{region}".strip()
+        return _join_parts(line1 + gf_suffix, line2, region)
 
     if content_type in {"Exclusive", "Editorial Short"}:
         ep_text = f" ep. {ep}" if ep else ""
-        return f"{prop} Short{ep_text}\n{region}{gf_suffix}".strip()
+        return _join_parts(f"{prop} Short{ep_text}", region + gf_suffix)
 
     if content_type in {"Lift", "Musical Lift", "Magical Moment"}:
         label = "Magical Moment" if content_type == "Magical Moment" else content_type
@@ -108,19 +112,19 @@ def build_djr_overview_text(record, target_country=None):
 
     if content_type == "Compilation":
         prefix = "MEGA Compilation" if "mega" in activity.lower() or "mega" in title.lower() else "Compilation"
-        return f"{prefix} {prop}\n{region}{gf_suffix}".strip()
+        return _join_parts(f"{prefix} {prop}", region + gf_suffix)
 
     if content_type == "Live Stream":
-        if "full" in title.lower() or "episode" in title.lower(): return f"{prop} Compilation Full Eps\n{region}{gf_suffix}".strip()
-        return f"MEGA {prop}\n{region}{gf_suffix}".strip()
+        if "full" in title.lower() or "episode" in title.lower(): return _join_parts(f"{prop} Compilation Full Eps", region + gf_suffix)
+        return _join_parts(f"MEGA {prop}", region + gf_suffix)
 
     if content_type == "Podcast":
-        return f"{prop} Podcast\n{region}{gf_suffix}".strip()
+        return _join_parts(f"{prop} Podcast", region + gf_suffix)
 
     if content_type == "Vertical Short":
         return prop
 
-    return f"{prop}\n{region}{gf_suffix}".strip()
+    return _join_parts(prop, region + gf_suffix)
 
 def get_djr_overview_bucket(content_type):
     if content_type == "Full Episode": return "full_eps"
@@ -194,8 +198,6 @@ def auto_adjust_djr_overview_heights(ws):
         for row in rows:
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 42)
 
-import re
-
 def is_country_match(target_country: str, included_list: set) -> bool: 
     if not target_country: return True
     target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
@@ -219,7 +221,17 @@ def populate_monthly_overview_djr(
 
     if target_country:
         from openpyxl.styles import PatternFill
-        # LIMPIEZA LÁSER: Borra SÓLO el contenido exacto para dejar intactas las fechas
+        
+        # FIX DEFINITIVO DE LIMPIEZA: Descombina toda el área del calendario (filas 9 a 70, columnas 4 a 10)
+        # Esto soluciona que la información máster (como los Tiers) se quedara atascada y apareciera apilada.
+        ranges_to_unmerge = []
+        for m in list(ws.merged_cells.ranges):
+            if 4 <= m.min_col <= 10 and m.min_row >= 9:
+                ranges_to_unmerge.append(m)
+        for m in ranges_to_unmerge:
+            try: ws.unmerge_cells(str(m))
+            except: pass
+            
         for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
             rows_to_clear = [
                 layout["full_eps"], layout["exclusive"], layout["lifts"],
@@ -228,12 +240,6 @@ def populate_monthly_overview_djr(
                 layout["vertical_rows"][0], layout["vertical_rows"][1]
             ]
             for col in range(4, 11):
-                # Descombinar y limpiar textos viejos con Tiers
-                try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
-                except: pass
-                try: ws.unmerge_cells(start_row=layout["podcast_rows"][0], start_column=col, end_row=layout["podcast_rows"][1], end_column=col)
-                except: pass
-                
                 for r in rows_to_clear:
                     try:
                         cell = ws.cell(row=r, column=col)

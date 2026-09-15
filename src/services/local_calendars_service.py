@@ -65,7 +65,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if isinstance(cell_c, Cell): cell_c.value = None
         safe_set_value(sheet, row_idx, 2, label)
         sheet.row_dimensions[row_idx].hidden = False
-        sheet.row_dimensions[row_idx].height = 20  
+        sheet.row_dimensions[row_idx].height = 30  # Altura ampliada
         for c in range(2, 32): 
             cell = sheet.cell(row=row_idx, column=c)
             if c >= 3 and isinstance(cell, Cell): cell.value = None
@@ -262,7 +262,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             "asset", "title", "synopsis", "planning strategy"
         ]
         
-        # FIX: Añadidos "tz id" y "tc im" para contrarrestar los errores tipográficos de la plantilla original
         junk_keywords = [
             "watermark", "bug", "copyright", "endcard", "branding", 
             "status conforming", "comments", "total vod", "burned", 
@@ -278,6 +277,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             if any(h in header_col_text for h in standard_headers) or "week" in header_col_text:
                 safe_rows.add(r)
                 in_junk_section = False
+                
+                # FIX ALTURA: Protege e impone una altura mínima a cabeceras estandar como las de la fila 196
+                if "week" not in header_col_text:
+                    ws.row_dimensions[r].height = 35 
+
                 continue
 
             if r in safe_rows:
@@ -300,7 +304,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 continue
 
         # ---------------- EJECUCIÓN (VACIADO Y OCULTACIÓN SEGURA) ----------------
-        # FIX: Descombinar todo lo que se va a ocultar de forma estricta
         ranges_to_unmerge = []
         for m in list(ws.merged_cells.ranges):
             if m.min_row in rows_to_hide_and_clear or m.max_row in rows_to_hide_and_clear:

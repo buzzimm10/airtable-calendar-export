@@ -197,7 +197,6 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_text = build_djr_overview_text(record, target_country=target_country)
     bottom_text = get_djr_overview_region_text(record)
 
-    # Solo llamamos a la función local, sin importarla
     append_to_cell(top_cell, top_text)
 
     fill = PatternFill(fill_type="solid", fgColor=DJR_OVERVIEW_FILL_COLORS["vertical"])
@@ -207,7 +206,6 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_cell.font = Font(bold=True, color="FF000000")
     top_cell.alignment = center_wrap()
 
-    # MAGIA: Merge vertical si es calendario local
     if target_country:
         bottom_cell.value = None
         try:
@@ -260,7 +258,7 @@ def auto_adjust_djr_overview_heights(ws):
 
 import re
 
-def is_country_match(target_country: str, included_list: set) -> bool: # <-- Cambiado de List[str] a set
+def is_country_match(target_country: str, included_list: set) -> bool: 
     if not target_country: return True
     target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
     for c in included_list:
@@ -295,15 +293,13 @@ def populate_monthly_overview_djr(
         if asset_is_event(fields): continue
             
         if target_country:
-            from core.countries import collect_included_countries
-            included, _ = collect_included_countries(
-                youtube_channel=fields.get(AT_FIELDS["youtube_channel"]),
-                region=fields.get(AT_FIELDS["region"]),
-                notes=fields.get(AT_FIELDS["notes"]),
-                excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
-                channel_id_to_name_map=channel_id_to_name_map,
+            # FILTRO DJR INTELIGENTE IMPORTADO DE FULL_CALENDAR_DJR
+            from exporters.full_calendar_djr import collect_included_countries_djr
+            included = collect_included_countries_djr(
+                record=rec, 
+                channel_id_to_name_map=channel_id_to_name_map
             )
-            # FILTRO INTELIGENTE
+            
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))

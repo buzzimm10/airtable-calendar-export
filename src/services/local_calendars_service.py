@@ -75,8 +75,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 20  
         
-        # Aplicar estilos, colores y BORDES
-        for c in range(2, 35): 
+        # Aplicar estilos, colores y BORDES (Limitado hasta la columna 32 = AE)
+        for c in range(2, 32): 
             cell = sheet.cell(row=row_idx, column=c)
             if c >= 3 and isinstance(cell, Cell):
                 cell.value = None
@@ -102,7 +102,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         if not isinstance(row_idx, int): return
         sheet.row_dimensions[row_idx].hidden = False
         sheet.row_dimensions[row_idx].height = 60 if is_tx else 35 
-        for c in range(4, 35):
+        for c in range(4, 32):
             cell = sheet.cell(row=row_idx, column=c)
             if isinstance(cell, Cell): # Alineación solo a celdas reales
                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -112,8 +112,10 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         country_wb = load_workbook(master_path, data_only=False)
         clean_country = get_clean_country_name(country)
         
+        # 1. EXCLUIR PESTAÑAS NO DESEADAS EN LOCAL CALENDARS
         for sn in country_wb.sheetnames:
-            if "compilation" in sn.lower(): del country_wb[sn]
+            if "compilation" in sn.lower() or sn in ["Sheet 1", "ID's", "Metadata Programming Spain"]: 
+                del country_wb[sn]
             
         if sheet_name not in country_wb.sheetnames:
             country_wb.close()
@@ -127,6 +129,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         safe_rows: Set[int] = set()
 
         ws.column_dimensions['AG'].hidden = True
+        ws.column_dimensions['AF'].hidden = True
 
         if records:
             if is_djr:
@@ -251,7 +254,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     max_content_row = dc_tc
                 
                 if country_row_rollout:
-                    for col in range(4, 35): 
+                    for col in range(4, 32): 
                         cell = ws.cell(row=country_row_rollout, column=col)
                         cell_val = str(cell.value).strip().upper() if hasattr(cell, 'value') else ""
                         if "YES" not in cell_val:
@@ -282,7 +285,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 safe_rows.add(prev_r)
                 ws.row_dimensions[prev_r].hidden = False
                 ws.row_dimensions[prev_r].height = 15
-                for c in range(1, 35):
+                for c in range(1, 32):
                     cell = ws.cell(row=prev_r, column=c)
                     if isinstance(cell, Cell):
                         cell.value = None
@@ -340,7 +343,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             ws.row_dimensions[r].hidden = True
             ws.row_dimensions[r].height = 0
             
-            for c in range(1, 35):
+            for c in range(1, 32):
                 cell = ws.cell(row=r, column=c)
                 if isinstance(cell, Cell):
                     cell.value = None

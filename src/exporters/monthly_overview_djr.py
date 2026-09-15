@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from openpyxl.styles import Font, PatternFill, Alignment, Border
 from openpyxl.utils import get_column_letter
-from openpyxl.cell.cell import Cell
+from openpyxl.cell.cell import Cell, MergedCell
 
 from config.fields import AT_FIELDS
 from config.layouts import DAY_ORDER
@@ -78,7 +78,6 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
-    # Si es un país local, NUNCA imprime los Tiers debajo del título
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -220,31 +219,18 @@ def populate_monthly_overview_djr(
     ws = wb[overview_sheet_name]
 
     if target_country:
-        from openpyxl.styles import PatternFill
-        from openpyxl.cell.cell import Cell
-        
-        # 1. Extraemos las filas exactas donde están las fechas, para Protegerlas.
         date_rows = [layout["date_row"] for layout in DJR_OVERVIEW_WEEK_LAYOUT.values()]
         
-        # 2. Descombinamos todas las celdas de las columnas D a J, excepto las filas de fechas.
-        ranges_to_unmerge = []
-        for m in list(ws.merged_cells.ranges):
-            if 4 <= m.min_col <= 10 and 9 <= m.min_row <= 70:
-                if m.min_row not in date_rows:
-                    ranges_to_unmerge.append(m)
-        for m in ranges_to_unmerge:
-            try: ws.unmerge_cells(str(m))
-            except: pass
-            
-        # 3. Vaciado táctico. Borramos TODOS los rastros de texto y color del Master EMEA.
-        for r in range(9, 70):
-            if r in date_rows: continue # ¡Prohibido tocar las fechas!
+        # Limpieza Incondicional
+        for r in range(9, 75):
+            if r in date_rows: continue
             for c in range(4, 11):
                 try:
                     cell = ws.cell(row=r, column=c)
-                    if isinstance(cell, Cell):
+                    if not isinstance(cell, MergedCell):
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
+                        cell.border = Border()
                 except: pass
 
     first_monday = write_djr_overview_header(ws, records) 
@@ -257,8 +243,6 @@ def populate_monthly_overview_djr(
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
             included = collect_included_countries_djr(record=rec, channel_id_to_name_map=channel_id_to_name_map)
-            
-            # Si el contenido no pertenece a Rumanía (o al país actual), se ignora completamente.
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))

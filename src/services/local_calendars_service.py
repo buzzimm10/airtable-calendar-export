@@ -93,15 +93,11 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             cell = sheet.cell(row=row_idx, column=c)
             if isinstance(cell, Cell): cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    # Las palabras clave de basura que colapsan filas
-    junk_keywords = {"watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in"}
-
     for country in selected_countries:
         if country.lower() in ["spain", "españa"]: continue
         country_wb = load_workbook(master_path, data_only=False)
         clean_country = get_clean_country_name(country)
         
-        # --- FIX: Borrado estricto de pestañas ---
         for sn in list(country_wb.sheetnames):
             sn_lower = sn.lower()
             if "compilation" in sn_lower or "sheet 1" in sn_lower or "sheet1" in sn_lower or "id's" in sn_lower or "metadata" in sn_lower:
@@ -163,7 +159,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     
                     style_recycled_row(ws, used_row, "USED OR NOT", fill_grey, is_last=False)
                     style_recycled_row(ws, link_row, "LINK YOUTUBE", fill_white, is_last=True)
-                    
                     ws.row_dimensions[blank_row].hidden = False
                     ws.row_dimensions[blank_row].height = 15
                     for c in range(1, 32):
@@ -245,7 +240,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     israel_dc_tc = block.tc_row
                     if isinstance(israel_dc_tc, int): format_israel_tx_tc(ws, israel_dc_tc, is_tx=False); safe_rows.add(israel_dc_tc)
 
-        # ---------------- LA FILA BLANCA PERFECTA ENTRE SEMANAS ----------------
         for r in range(5, current_max_row + 1):
             if get_val(ws, r, 2).startswith("week"):
                 prev_r = r - 1
@@ -259,40 +253,36 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     cell.fill = PatternFill(fill_type=None)
                     cell.border = Border() 
 
-        # ---------------- LA GUILLOTINA: RECOLECCIÓN DE BASURA ----------------
+        # ---------------- LA NUEVA GUILLOTINA (Radar Inteligente) ----------------
         rows_to_hide_and_clear = set()
-        in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
-        sniper_limit: int = max_content_row + 30 if max_content_row > 0 else current_max_row
         
         standard_headers = [
-            "deadline for delivery", "owner", "property", 
-            "content type", "asset", "title", "synopsis", "planning strategy"
+            "deadline", "owner", "property", "content type", 
+            "asset", "title", "synopsis", "planning strategy"
+        ]
+        
+        junk_keywords = [
+            "watermark", "bug", "copyright", "endcard", "branding", 
+            "status conforming", "comments", "total vod", "burned"
         ]
 
-        for r in range(1, sniper_limit):
+        for r in range(1, current_max_row + 1):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
-            val_d = get_val(ws, r, 4)
-            combined_val = val_a + " " + val_b + " " + val_c + " " + val_d
             
-            # --- FIX: Verificación estricta sin falsos positivos de títulos ---
-            clean_val_a = val_a.replace(":", "").strip()
-            clean_val_b = val_b.replace(":", "").strip()
+            # EL FIX: Solo leemos las 3 primeras columnas para no ocultar "Ladybugs"
+            header_col_text = f"{val_a} {val_b} {val_c}".lower()
             
-            if any(h in combined_val for h in standard_headers) or val_b.startswith("week"):
+            if any(h in header_col_text for h in standard_headers) or "week" in header_col_text:
                 safe_rows.add(r)
-                in_junk_section = False
+                continue
 
             if r in safe_rows:
-                in_junk_section = False
                 continue
             
-            if clean_val_a in junk_keywords or clean_val_b in junk_keywords:
-                in_junk_section = True
-
-            if in_junk_section:
+            if any(k in header_col_text for k in junk_keywords):
                 rows_to_hide_and_clear.add(r)
                 continue
                 
@@ -300,7 +290,7 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rows_to_hide_and_clear.add(r)
                 continue
 
-            if any(c in val_a + val_b + val_c for c in country_names_lower) or val_b == "total" or val_c == "total":
+            if any(c in header_col_text for c in country_names_lower) or "total" in header_col_text:
                 rows_to_hide_and_clear.add(r)
                 continue
 

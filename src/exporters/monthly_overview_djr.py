@@ -206,19 +206,25 @@ def populate_monthly_overview_djr(
     wb, records, enable_mediaplanning=True,
     channel_id_to_name_map=None, target_country=None 
 ):
-    if DJR_MONTHLY_OVERVIEW_SHEET not in wb.sheetnames: return
-    ws = wb[DJR_MONTHLY_OVERVIEW_SHEET]
+    # EL FIX: Búsqueda dinámica de la pestaña (es a prueba de balas)
+    overview_sheet_name = None
+    for sn in wb.sheetnames:
+        if "overview" in sn.lower() or "monthly" in sn.lower():
+            overview_sheet_name = sn
+            break
+            
+    if not overview_sheet_name: return
+    ws = wb[overview_sheet_name]
 
     if target_country:
         from openpyxl.styles import PatternFill
-        # Purga MASIVA celda por celda antes de escribir el local overview
+        # EL FIX: Purga absoluta de textos residuales de la plantilla maestra
         for col in range(4, 11):
-            for row in range(10, 80):
+            for row in range(5, 100):
                 cell = ws.cell(row=row, column=col)
                 cell.value = None
                 cell.fill = PatternFill(fill_type=None)
                 
-            # EL FIX: El unmerge ahora está DENTRO del loop de las columnas
             for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
                 try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
                 except: pass
@@ -272,4 +278,4 @@ def populate_monthly_overview_djr(
         write_djr_overview_regular_cell(ws, row, col, text, bucket)
 
     auto_adjust_djr_overview_heights(ws)
-    logging.info(f"Finished populating '{DJR_MONTHLY_OVERVIEW_SHEET}'.")
+    logging.info(f"Finished populating '{overview_sheet_name}'.")

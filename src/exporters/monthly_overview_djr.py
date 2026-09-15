@@ -78,7 +78,7 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
-    # Si es calendario local, ignoramos la región para que no imprima TIER
+    # Si es calendario local, no imprime el bloque de TIER
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -218,21 +218,27 @@ def populate_monthly_overview_djr(
     ws = wb[overview_sheet_name]
 
     if target_country:
-        # BOMBA DE VACÍO: Descombina y limpia todo el lienzo antes de dibujar lo local
-        merges = list(ws.merged_cells.ranges)
-        for m in merges:
-            if 4 <= m.min_col <= 10 and 9 <= m.min_row <= 120:
-                try: ws.unmerge_cells(str(m))
+        from openpyxl.styles import PatternFill
+        # LIMPIEZA LÁSER: Borra SÓLO el contenido exacto para dejar intactas las fechas
+        for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
+            rows_to_clear = [
+                layout["full_eps"], layout["exclusive"], layout["lifts"],
+                layout["compilations"], layout["live"], 
+                layout["podcast_rows"][0], layout["podcast_rows"][1],
+                layout["vertical_rows"][0], layout["vertical_rows"][1]
+            ]
+            for col in range(4, 11):
+                # Descombinar y limpiar textos viejos con Tiers
+                try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
+                except: pass
+                try: ws.unmerge_cells(start_row=layout["podcast_rows"][0], start_column=col, end_row=layout["podcast_rows"][1], end_column=col)
                 except: pass
                 
-        for col in range(4, 11):
-            for row in range(9, 120):
-                cell = ws.cell(row=row, column=col)
-                if isinstance(cell, Cell):
+                for r in rows_to_clear:
                     try:
+                        cell = ws.cell(row=r, column=col)
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
-                        cell.border = Border()
                     except: pass
 
     first_monday = write_djr_overview_header(ws, records) 

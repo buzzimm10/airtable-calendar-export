@@ -110,7 +110,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         ws = country_wb[sheet_name]
         is_israel = clean_country.lower() == "israel"
         max_content_row: int = 0
-        current_max_row: int = ws.max_row if isinstance(ws.max_row, int) else 500
         safe_rows: Set[int] = set()
 
         ws.column_dimensions['AG'].hidden = True
@@ -240,11 +239,20 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                     israel_dc_tc = block.tc_row
                     if isinstance(israel_dc_tc, int): format_israel_tx_tc(ws, israel_dc_tc, is_tx=False); safe_rows.add(israel_dc_tc)
 
-        for r in range(5, current_max_row + 1):
+        for r in range(5, 500):
             if get_val(ws, r, 2).startswith("week"):
+                prev_r = r - 1
                 safe_rows.add(r)
+                safe_rows.add(prev_r)
+                ws.row_dimensions[prev_r].hidden = False
+                ws.row_dimensions[prev_r].height = 15
+                for c in range(1, 32):
+                    cell = ws.cell(row=prev_r, column=c)
+                    if isinstance(cell, Cell): cell.value = None
+                    cell.fill = PatternFill(fill_type=None)
+                    cell.border = Border() 
 
-        # ---------------- LA NUEVA GUILLOTINA (Radar Inteligente) ----------------
+        # ---------------- LA GUILLOTINA LÁSER (Detecta Typos) ----------------
         rows_to_hide_and_clear = set()
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
@@ -254,16 +262,17 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             "asset", "title", "synopsis", "planning strategy"
         ]
         
+        # FIX: Añadidos "tz id" y "tc im" para contrarrestar los errores tipográficos de la plantilla original
         junk_keywords = [
             "watermark", "bug", "copyright", "endcard", "branding", 
-            "status conforming", "comments", "total vod", "burned", "tx id", "tc in"
+            "status conforming", "comments", "total vod", "burned", 
+            "tx id", "tc in", "tz id", "tc im"
         ]
 
-        for r in range(1, current_max_row + 1):
+        for r in range(1, 500):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
-            
             header_col_text = f"{val_a} {val_b} {val_c}".lower()
             
             if any(h in header_col_text for h in standard_headers) or "week" in header_col_text:
@@ -290,13 +299,8 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 rows_to_hide_and_clear.add(r)
                 continue
 
-        if max_content_row > 0:
-            for r in range(max_content_row + 5, current_max_row + 1): 
-                if r not in safe_rows:
-                    rows_to_hide_and_clear.add(r)
-
         # ---------------- EJECUCIÓN (VACIADO Y OCULTACIÓN SEGURA) ----------------
-        # FIX: Descombinar todo lo que se va a ocultar para evitar el "Squashing" en Excel
+        # FIX: Descombinar todo lo que se va a ocultar de forma estricta
         ranges_to_unmerge = []
         for m in list(ws.merged_cells.ranges):
             if m.min_row in rows_to_hide_and_clear or m.max_row in rows_to_hide_and_clear:
@@ -309,11 +313,13 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
         for r in sorted(list(rows_to_hide_and_clear)):
             ws.row_dimensions[r].hidden = True
             ws.row_dimensions[r].height = 0
-            for c in range(1, 32):
-                cell = ws.cell(row=r, column=c)
-                if isinstance(cell, Cell): cell.value = None
-                cell.fill = PatternFill(fill_type=None)
-                cell.border = Border()
+            for c in range(1, 35):
+                try:
+                    cell = ws.cell(row=r, column=c)
+                    if isinstance(cell, Cell): cell.value = None
+                    cell.fill = PatternFill(fill_type=None)
+                    cell.border = Border()
+                except: pass
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY ---
         for sn in country_wb.sheetnames:

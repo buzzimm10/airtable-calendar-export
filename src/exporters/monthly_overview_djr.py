@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from datetime import timedelta
 
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import Cell, MergedCell
 
@@ -78,7 +78,7 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
-    # Omitir región/tier si es calendario local
+    # Si es calendario local, no imprimirá el bloque de TIER
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -152,8 +152,8 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_row, bottom_row = layout["vertical_rows"]
     top_cell = get_writable_cell(ws, top_row, col)
     bottom_cell = get_writable_cell(ws, bottom_row, col)
-    
     top_text = build_djr_overview_text(record, target_country=target_country)
+    bottom_text = get_djr_overview_region_text(record)
     append_to_cell(top_cell, top_text)
 
     fill = PatternFill(fill_type="solid", fgColor=DJR_OVERVIEW_FILL_COLORS["vertical"])
@@ -164,10 +164,10 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     if target_country:
         if isinstance(bottom_cell, Cell):
             bottom_cell.value = None
-        # Rellenar color de la celda de abajo para que visualmente parezca bloque único
         bottom_cell.fill = fill 
+        try: ws.merge_cells(start_row=top_row, start_column=col, end_row=bottom_row, end_column=col)
+        except Exception: pass
     else:
-        bottom_text = get_djr_overview_region_text(record)
         bottom_cell.value = bottom_text
         bottom_cell.fill = fill
         bottom_cell.alignment = center_wrap()
@@ -200,22 +200,22 @@ def auto_adjust_djr_overview_heights(ws):
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 42)
 
 def is_country_match(target_country: str, included_list: set) -> bool: 
+    # Filtro robusto e inteligente a prueba de alias
     if not target_country: return True
-    target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
+    tc = target_country.lower().split("(")[0].strip()
     
-    # Nombres de seguridad para asegurar match
-    aliases = {
-        "GERMANY": ["GSA", "GERMAN"],
-        "TÜRKIYE": ["TURKEY", "TUKEY"],
-        "SPAIN": ["ESPAÑA"]
-    }
-    match_list = [target_clean] + aliases.get(target_clean, [])
+    if "germany" in tc or "gsa" in tc: tc = "gsa"
+    if "turk" in tc or "türk" in tc: tc = "turkey"
+    if "spain" in tc or "españa" in tc: tc = "spain"
     
-    for c in included_list:
-        c_clean = re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper()
-        for t in match_list:
-            if t == c_clean or t in c_clean or c_clean in t:
-                return True
+    for inc in included_list:
+        ic = str(inc).lower().split("(")[0].strip()
+        if "germany" in ic or "gsa" in ic: ic = "gsa"
+        if "turk" in ic or "türk" in ic: ic = "turkey"
+        if "spain" in ic or "españa" in ic: ic = "spain"
+        
+        if tc == ic or tc in ic or ic in tc:
+            return True
     return False
 
 def populate_monthly_overview_djr(
@@ -232,20 +232,31 @@ def populate_monthly_overview_djr(
     ws = wb[overview_sheet_name]
 
     if target_country:
-        # BARRIDO SUAVE: Mantiene intactos BORDES y CELDAS COMBINADAS
-        date_rows = [layout["date_row"] for layout in DJR_OVERVIEW_WEEK_LAYOUT.values()]
+        thin_side = Side(border_style="thin", color="000000")
+        standard_border = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
         
-        for r in range(9, 75):
-            if r in date_rows: continue # Protege las fechas
-            for c in range(4, 11):
-                try:
-                    cell = ws.cell(row=r, column=c)
-                    if isinstance(cell, Cell):
+        for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
+            for col in range(4, 11): # Lunes a Domingo
+                # 1. Descombinar SOLO los bloques múltiples
+                try: ws.unmerge_cells(start_row=layout["podcast_rows"][0], start_column=col, end_row=layout["podcast_rows"][1], end_column=col)
+                except: pass
+                try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
+                except: pass
+
+                # 2. Vaciado Quirúrgico: Restaura el color blanco/transparente y DIBUJA LOS BORDES
+                rows_to_clear = [
+                    layout["full_eps"], layout["exclusive"], layout["lifts"],
+                    layout["compilations"], layout["live"], 
+                    layout["podcast_rows"][0], layout["podcast_rows"][1],
+                    layout["vertical_rows"][0], layout["vertical_rows"][1]
+                ]
+                for r in rows_to_clear:
+                    try:
+                        cell = ws.cell(row=r, column=col)
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
-                        # OJO: NO HACEMOS cell.border = Border() AQUI!
-                except Exception:
-                    pass
+                        cell.border = standard_border # <--- RECONSTRUYE LA CUADRÍCULA
+                    except: pass
 
     first_monday = write_djr_overview_header(ws, records) 
     if not first_monday: return
@@ -257,7 +268,7 @@ def populate_monthly_overview_djr(
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
             included = collect_included_countries_djr(record=rec, channel_id_to_name_map=channel_id_to_name_map)
-            # Solo deja pasar los que sí corresponden a tu país
+            # Solo deja pasar los que de verdad corresponden a tu país
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))

@@ -96,7 +96,9 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
                 output_dir="country_calendars", 
                 channel_type="DJR",
                 selected_countries=selected_countries,
-                month_str=m_str
+                month_str=m_str,
+                records=records,                                  # <--- AÑADE ESTA LÍNEA
+                channel_id_to_name_map=channel_id_to_name_map     # <--- AÑADE ESTA LÍNEA
             )
         return zip_path  # Retornamos el zip para Streamlit
     # -------------------------------------------------------

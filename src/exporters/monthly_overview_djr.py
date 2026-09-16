@@ -27,7 +27,7 @@ DJR_OVERVIEW_DAY_COLS = {
     "Friday": 8, "Saturday": 9, "Sunday": 10,
 }
 
-# --- ACTUALIZADO: Layout con filas separadas para Interactive y Podcast ---
+# Layout con filas separadas para Interactive y Podcast
 DJR_OVERVIEW_WEEK_LAYOUT = {
     1: {"date_row": 9, "full_eps": 10, "exclusive": 11, "lifts": 12, "compilations": 13, "live": 14, "interactive": 15, "podcast": 16, "vertical_rows": (17, 18)},
     2: {"date_row": 20, "full_eps": 21, "exclusive": 22, "lifts": 23, "compilations": 24, "live": 25, "interactive": 26, "podcast": 27, "vertical_rows": (28, 29)},
@@ -36,10 +36,11 @@ DJR_OVERVIEW_WEEK_LAYOUT = {
     5: {"date_row": 53, "full_eps": 54, "exclusive": 55, "lifts": 56, "compilations": 57, "live": 58, "interactive": 59, "podcast": 60, "vertical_rows": (61, 62)},
 }
 
+# --- ACTUALIZADO: Color FFC9C9 añadido para interactive ---
 DJR_OVERVIEW_FILL_COLORS = {
     "full_eps": "FFFF00", "exclusive": "B4C6E7", "lifts": "A9D08E",
-    "compilations": "F4B084", "live": "00B0F0", "podcast": "CC99FF", "vertical": "FF99CC",
-    # Nota: Interactive no está aquí, así mantendrá el color original que le hayas puesto al template
+    "compilations": "F4B084", "live": "00B0F0", "podcast": "CC99FF", 
+    "interactive": "FFC9C9", "vertical": "FF99CC",
 }
 
 PROPERTY_ABBREVIATIONS = {
@@ -122,8 +123,9 @@ def build_djr_overview_text(record, target_country=None):
     if content_type == "Podcast":
         return _join_parts(f"{prop} Podcast", region + gf_suffix)
 
+    # --- ACTUALIZADO: Formato "Interactive [Property]" ---
     if content_type == "Interactive":
-        return _join_parts(f"{prop} Interactive", region + gf_suffix)
+        return _join_parts(f"Interactive {prop}", region + gf_suffix)
 
     if content_type == "Vertical Short":
         return prop
@@ -241,12 +243,10 @@ def populate_monthly_overview_djr(
         standard_border = Border(top=thin_side, bottom=thin_side, left=thin_side, right=thin_side)
         
         for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
-            for col in range(4, 11): # Lunes a Domingo
-                # 1. Descombinar SOLO los bloques verticales
+            for col in range(4, 11): 
                 try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
                 except: pass
 
-                # 2. Vaciado Quirúrgico
                 rows_to_clear = [
                     layout["full_eps"], layout["exclusive"], layout["lifts"],
                     layout["compilations"], layout["live"], 

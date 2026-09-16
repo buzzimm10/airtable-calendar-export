@@ -27,17 +27,19 @@ DJR_OVERVIEW_DAY_COLS = {
     "Friday": 8, "Saturday": 9, "Sunday": 10,
 }
 
+# --- ACTUALIZADO: Layout con filas separadas para Interactive y Podcast ---
 DJR_OVERVIEW_WEEK_LAYOUT = {
-    1: {"date_row": 9, "full_eps": 10, "exclusive": 11, "lifts": 12, "compilations": 13, "live": 14, "podcast_rows": (15, 16), "vertical_rows": (17, 18)},
-    2: {"date_row": 20, "full_eps": 21, "exclusive": 22, "lifts": 23, "compilations": 24, "live": 25, "podcast_rows": (26, 27), "vertical_rows": (28, 29)},
-    3: {"date_row": 31, "full_eps": 32, "exclusive": 33, "lifts": 34, "compilations": 35, "live": 36, "podcast_rows": (37, 38), "vertical_rows": (39, 40)},
-    4: {"date_row": 42, "full_eps": 43, "exclusive": 44, "lifts": 45, "compilations": 46, "live": 47, "podcast_rows": (48, 49), "vertical_rows": (50, 51)},
-    5: {"date_row": 53, "full_eps": 54, "exclusive": 55, "lifts": 56, "compilations": 57, "live": 58, "podcast_rows": (59, 60), "vertical_rows": (61, 62)},
+    1: {"date_row": 9, "full_eps": 10, "exclusive": 11, "lifts": 12, "compilations": 13, "live": 14, "interactive": 15, "podcast": 16, "vertical_rows": (17, 18)},
+    2: {"date_row": 20, "full_eps": 21, "exclusive": 22, "lifts": 23, "compilations": 24, "live": 25, "interactive": 26, "podcast": 27, "vertical_rows": (28, 29)},
+    3: {"date_row": 31, "full_eps": 32, "exclusive": 33, "lifts": 34, "compilations": 35, "live": 36, "interactive": 37, "podcast": 38, "vertical_rows": (39, 40)},
+    4: {"date_row": 42, "full_eps": 43, "exclusive": 44, "lifts": 45, "compilations": 46, "live": 47, "interactive": 48, "podcast": 49, "vertical_rows": (50, 51)},
+    5: {"date_row": 53, "full_eps": 54, "exclusive": 55, "lifts": 56, "compilations": 57, "live": 58, "interactive": 59, "podcast": 60, "vertical_rows": (61, 62)},
 }
 
 DJR_OVERVIEW_FILL_COLORS = {
     "full_eps": "FFFF00", "exclusive": "B4C6E7", "lifts": "A9D08E",
     "compilations": "F4B084", "live": "00B0F0", "podcast": "CC99FF", "vertical": "FF99CC",
+    # Nota: Interactive no está aquí, así mantendrá el color original que le hayas puesto al template
 }
 
 PROPERTY_ABBREVIATIONS = {
@@ -120,6 +122,9 @@ def build_djr_overview_text(record, target_country=None):
     if content_type == "Podcast":
         return _join_parts(f"{prop} Podcast", region + gf_suffix)
 
+    if content_type == "Interactive":
+        return _join_parts(f"{prop} Interactive", region + gf_suffix)
+
     if content_type == "Vertical Short":
         return prop
 
@@ -132,6 +137,7 @@ def get_djr_overview_bucket(content_type):
     if content_type == "Compilation": return "compilations"
     if content_type == "Live Stream": return "live"
     if content_type == "Podcast": return "podcast"
+    if content_type == "Interactive": return "interactive"
     if content_type == "Vertical Short": return "vertical"
     return None
 
@@ -194,28 +200,27 @@ def auto_adjust_djr_overview_heights(ws):
     for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
         rows = [
             layout["full_eps"], layout["exclusive"], layout["lifts"],
-            layout["compilations"], layout["live"], *layout["podcast_rows"], *layout["vertical_rows"],
+            layout["compilations"], layout["live"], layout["interactive"], layout["podcast"], *layout["vertical_rows"],
         ]
         for row in rows:
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 42)
 
 def is_country_match(target_country: str, included_list: set) -> bool: 
-    # Filtro robusto e inteligente a prueba de alias
     if not target_country: return True
     tc = target_country.lower().split("(")[0].strip()
     
-    if "germany" in tc or "gsa" in tc: tc = "gsa"
-    if "turk" in tc or "türk" in tc: tc = "turkey"
-    if "spain" in tc or "españa" in tc: tc = "spain"
+    aliases = {
+        "GERMANY": ["GSA", "GERMAN"],
+        "TÜRKIYE": ["TURKEY", "TUKEY"],
+        "SPAIN": ["ESPAÑA"]
+    }
+    match_list = [tc] + aliases.get(tc.upper(), [])
     
     for inc in included_list:
         ic = str(inc).lower().split("(")[0].strip()
-        if "germany" in ic or "gsa" in ic: ic = "gsa"
-        if "turk" in ic or "türk" in ic: ic = "turkey"
-        if "spain" in ic or "españa" in ic: ic = "spain"
-        
-        if tc == ic or tc in ic or ic in tc:
-            return True
+        for t in match_list:
+            if t == ic or t in ic or ic in t:
+                return True
     return False
 
 def populate_monthly_overview_djr(
@@ -237,17 +242,15 @@ def populate_monthly_overview_djr(
         
         for layout in DJR_OVERVIEW_WEEK_LAYOUT.values():
             for col in range(4, 11): # Lunes a Domingo
-                # 1. Descombinar SOLO los bloques múltiples
-                try: ws.unmerge_cells(start_row=layout["podcast_rows"][0], start_column=col, end_row=layout["podcast_rows"][1], end_column=col)
-                except: pass
+                # 1. Descombinar SOLO los bloques verticales
                 try: ws.unmerge_cells(start_row=layout["vertical_rows"][0], start_column=col, end_row=layout["vertical_rows"][1], end_column=col)
                 except: pass
 
-                # 2. Vaciado Quirúrgico: Restaura el color blanco/transparente y DIBUJA LOS BORDES
+                # 2. Vaciado Quirúrgico
                 rows_to_clear = [
                     layout["full_eps"], layout["exclusive"], layout["lifts"],
                     layout["compilations"], layout["live"], 
-                    layout["podcast_rows"][0], layout["podcast_rows"][1],
+                    layout["interactive"], layout["podcast"],
                     layout["vertical_rows"][0], layout["vertical_rows"][1]
                 ]
                 for r in rows_to_clear:
@@ -255,7 +258,7 @@ def populate_monthly_overview_djr(
                         cell = ws.cell(row=r, column=col)
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
-                        cell.border = standard_border # <--- RECONSTRUYE LA CUADRÍCULA
+                        cell.border = standard_border 
                     except: pass
 
     first_monday = write_djr_overview_header(ws, records) 
@@ -268,7 +271,6 @@ def populate_monthly_overview_djr(
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
             included = collect_included_countries_djr(record=rec, channel_id_to_name_map=channel_id_to_name_map)
-            # Solo deja pasar los que de verdad corresponden a tu país
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))
@@ -295,12 +297,7 @@ def populate_monthly_overview_djr(
             write_djr_overview_vertical(ws, layout, col, fields, target_country=target_country)
             continue
 
-        if bucket == "podcast":
-            row = layout["podcast_rows"][0]
-            cell = get_writable_cell(ws, row, col)
-            if normalize_str(cell.value): row = layout["podcast_rows"][1]
-        else:
-            row = layout[bucket]
+        row = layout[bucket]
 
         text = build_djr_overview_text(fields, target_country=target_country)
         write_djr_overview_regular_cell(ws, row, col, text, bucket)

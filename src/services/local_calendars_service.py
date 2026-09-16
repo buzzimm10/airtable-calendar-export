@@ -337,56 +337,6 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                 new_title = sn.replace("EMEA", clean_country.upper())
                 country_wb[sn].title = new_title[:31] 
 
-        # ---------------- FILTRO VISUAL INFALIBLE PARA MONTHLY OVERVIEW ----------------
-        overview_sheet_name = None
-        for sn in country_wb.sheetnames:
-            if "overview" in sn.lower() or "monthly" in sn.lower():
-                overview_sheet_name = sn
-                break
-                
-        if overview_sheet_name:
-            ws_ov = country_wb[overview_sheet_name]
-            target_clean_lower = clean_country.lower()
-            
-            tier_b_countries = ["bulgaria", "greece", "israel", "netherlands", "portugal", "romania", "türkiye", "turkey", "sweden", "denmark", "norway"]
-            my_tier = "b" if any(c in target_clean_lower for c in tier_b_countries) else "a"
-            
-            for r in range(9, 100):
-                if r in [9, 20, 31, 42, 53]: continue # Fechas protegidas
-                for c in range(4, 11):
-                    try:
-                        cell = ws_ov.cell(row=r, column=c)
-                        if hasattr(cell, 'value') and cell.value:
-                            val_str = str(cell.value).upper()
-                            
-                            # Si es un bloque de contenido (identificable por tener texto de TIER, ONLY o EMEA)
-                            if any(k in val_str for k in ["TIER", "ONLY", "EMEA"]):
-                                keep = False
-                                if "TIER A, B" in val_str or "TIER A,B" in val_str: keep = True
-                                elif "TIER B" in val_str and my_tier == "b": keep = True
-                                elif "TIER A" in val_str and my_tier == "a": keep = True
-                                elif "EMEA" in val_str: keep = True
-                                elif target_clean_lower.upper() in val_str: keep = True
-                                
-                                # Si dice SPAIN ONLY y tu país no es España, bloqueado.
-                                if "ONLY" in val_str and target_clean_lower.upper() not in val_str:
-                                    keep = False
-                                    
-                                if keep:
-                                    # Dejar el contenido pero BORRAR el texto del Tier
-                                    if not isinstance(cell, MergedCell):
-                                        lines = str(cell.value).split('\n')
-                                        new_lines = [line.strip() for line in lines if "TIER" not in line.upper() and "ONLY" not in line.upper() and "EMEA" not in line.upper()]
-                                        cell.value = "\n".join(new_lines).strip()
-                                else:
-                                    # Destruir contenido que no va
-                                    if not isinstance(cell, MergedCell):
-                                        cell.value = None
-                                        cell.fill = PatternFill(fill_type=None)
-                                        cell.border = Border()
-                    except:
-                        pass
-
         filename = f"{month_num}_Social Media Calendar {brand_label} YouTube {clean_country} - {month_name_year}.xlsx"
         output_path = os.path.join(output_dir, filename)
         country_wb.template = False

@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from datetime import timedelta
 
-from openpyxl.styles import Font, PatternFill, Alignment, Border
+from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import Cell, MergedCell
 
@@ -78,6 +78,7 @@ def build_djr_overview_text(record, target_country=None):
     title = normalize_str(record.get(AT_FIELDS["youtube_title"]))
     activity = normalize_str(record.get(AT_FIELDS["activity"]))
     
+    # Omitir región/tier si es calendario local
     region = "" if target_country else get_djr_overview_region_text(record)
     
     fields = record.get("fields", record)
@@ -151,22 +152,24 @@ def write_djr_overview_vertical(ws, layout, col, record, target_country=None):
     top_row, bottom_row = layout["vertical_rows"]
     top_cell = get_writable_cell(ws, top_row, col)
     bottom_cell = get_writable_cell(ws, bottom_row, col)
+    
     top_text = build_djr_overview_text(record, target_country=target_country)
-    bottom_text = get_djr_overview_region_text(record)
     append_to_cell(top_cell, top_text)
 
     fill = PatternFill(fill_type="solid", fgColor=DJR_OVERVIEW_FILL_COLORS["vertical"])
     top_cell.fill = fill
-    bottom_cell.fill = fill
     top_cell.font = Font(bold=True, color="FF000000")
     top_cell.alignment = center_wrap()
 
     if target_country:
-        bottom_cell.value = None
-        try: ws.merge_cells(start_row=top_row, start_column=col, end_row=bottom_row, end_column=col)
-        except Exception: pass
+        if isinstance(bottom_cell, Cell):
+            bottom_cell.value = None
+        # Rellenar color de la celda de abajo para que visualmente parezca bloque único
+        bottom_cell.fill = fill 
     else:
+        bottom_text = get_djr_overview_region_text(record)
         bottom_cell.value = bottom_text
+        bottom_cell.fill = fill
         bottom_cell.alignment = center_wrap()
         if bottom_text == "SPAIN ONLY": bottom_cell.font = Font(bold=True, color="FFFFFF00")
         else: bottom_cell.font = Font(bold=True, color="FFFF0000")
@@ -199,10 +202,20 @@ def auto_adjust_djr_overview_heights(ws):
 def is_country_match(target_country: str, included_list: set) -> bool: 
     if not target_country: return True
     target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
+    
+    # Nombres de seguridad para asegurar match
+    aliases = {
+        "GERMANY": ["GSA", "GERMAN"],
+        "TÜRKIYE": ["TURKEY", "TUKEY"],
+        "SPAIN": ["ESPAÑA"]
+    }
+    match_list = [target_clean] + aliases.get(target_clean, [])
+    
     for c in included_list:
         c_clean = re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper()
-        if target_clean == c_clean or target_clean in c_clean or c_clean in target_clean:
-            return True
+        for t in match_list:
+            if t == c_clean or t in c_clean or c_clean in t:
+                return True
     return False
 
 def populate_monthly_overview_djr(
@@ -219,19 +232,20 @@ def populate_monthly_overview_djr(
     ws = wb[overview_sheet_name]
 
     if target_country:
+        # BARRIDO SUAVE: Mantiene intactos BORDES y CELDAS COMBINADAS
         date_rows = [layout["date_row"] for layout in DJR_OVERVIEW_WEEK_LAYOUT.values()]
         
-        # Limpieza Incondicional
         for r in range(9, 75):
-            if r in date_rows: continue
+            if r in date_rows: continue # Protege las fechas
             for c in range(4, 11):
                 try:
                     cell = ws.cell(row=r, column=c)
-                    if not isinstance(cell, MergedCell):
+                    if isinstance(cell, Cell):
                         cell.value = None
                         cell.fill = PatternFill(fill_type=None)
-                        cell.border = Border()
-                except: pass
+                        # OJO: NO HACEMOS cell.border = Border() AQUI!
+                except Exception:
+                    pass
 
     first_monday = write_djr_overview_header(ws, records) 
     if not first_monday: return
@@ -243,6 +257,7 @@ def populate_monthly_overview_djr(
         if target_country:
             from exporters.full_calendar_djr import collect_included_countries_djr
             included = collect_included_countries_djr(record=rec, channel_id_to_name_map=channel_id_to_name_map)
+            # Solo deja pasar los que sí corresponden a tu país
             if not is_country_match(target_country, included): continue
 
         owner = hub_role(fields.get(AT_FIELDS["owner_hub"]))

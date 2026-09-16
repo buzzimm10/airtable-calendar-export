@@ -39,7 +39,7 @@ def check_password():
             st.error("❌ Contraseña incorrecta")
     return False
 
-if not check_password():
+# if not check_password():
     st.stop()  # Detiene la app aquí si no han puesto la clave
 
 # --- PAGE CONFIG ---

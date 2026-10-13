@@ -55,6 +55,9 @@ CHANNEL_COUNTRY_MAP = {
     "disney kids france": {"France (French)"},
     "disney kids italia": {"Italy (Italian)"},
     "disney kids greece": {"Greece (Greek)"},
+    "disney kids belgië-nederland": {"Netherlands (Dutch)"},
+    "disney kids be": {"Belgium (French)"},    
+    "disney kids belgium": {"Belgium (French)"},  
     "disney kids mena": {"Middle East (Arabic - MSA)"},
     "disney kids bulgaria": {"Bulgaria (Bulgarian)"},
     # Shared channels (Disney Romania, Disney Channel MENA)

@@ -3,7 +3,7 @@ from openpyxl.utils import column_index_from_string
 DJR_TARGET_SHEET = "FULL CALENDAR YT DJR EMEA"
 DJR_MONTHLY_OVERVIEW_SHEET = "MONTHLY OVERVIEW YT DJR EMEA"
 
-DJR_WEEK_ANCHOR_CELLS = ["D7", "D69", "D131", "D193", "D255"]
+DJR_WEEK_ANCHOR_CELLS = ["D7", "D69", "D131", "D193", "D255", "D317"]
 
 DJR_WEEK_BLOCK_HEIGHT = 62
 
@@ -70,21 +70,20 @@ DJR_WEEK_LAYOUT = {
 }
 
 DJR_BRANDING_LAYOUT = {
-    "watermark": [33, 34, 35, 36], # 4 filas
-    "bug": [37, 38, 39],           # 3 filas
-    "copyright": 40,               # 1 fila (int)
-    "endcard": [41, 42, 43, 44, 45, 46] # 6 filas
+    "watermark": [33, 34, 35, 36], 
+    "bug": [37, 38, 39],           
+    "copyright": 40,               
+    "endcard": [41, 42, 43, 44, 45, 46] 
 }
 
 # Inyección dinámica de las filas de BRANDING para Disney Junior (Offset: 62)
-for week_num in range(1, 6):
+# CAMBIO CRÍTICO: range(1, 7) para abarcar la semana 6
+for week_num in range(1, 7):
     offset = (week_num - 1) * 62
-    
-    # Nos aseguramos de que la clave exista antes de inyectar
     if week_num in DJR_WEEK_LAYOUT:
         DJR_WEEK_LAYOUT[week_num]["branding_rows"] = {
             "watermark": [33 + offset, 34 + offset, 35 + offset, 36 + offset],
             "bug": [37 + offset, 38 + offset, 39 + offset],
-            "copyright": 40 + offset,  # Int directo
+            "copyright": 40 + offset,  
             "endcard": [41 + offset, 42 + offset, 43 + offset, 44 + offset, 45 + offset, 46 + offset]
         }

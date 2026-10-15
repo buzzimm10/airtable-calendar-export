@@ -26,6 +26,8 @@ DJR_COUNTRY_SHORT_NAMES = {
 }
 
 DJR_REGION_PRESETS = {
+    "tier s": {"Spain"},
+    "s": {"Spain"},
     "tier a": {
         "France",
         "GSA (German)",

@@ -162,32 +162,32 @@ COUNTRY_SHORT_NAMES = {
 }
 
 REGION_PRESETS = {
+    "tier s": {"Spain"},
+    "s": {"Spain"},
+    "group s": {"Spain"},
     "a": {"Spain", "France (French)", "Poland (Polish)"},
-    "b": {
-        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
-        "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
-        "Israel (Hebrew)", "Bulgaria (Bulgarian)"
-    },
-    "c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)",
-                "Denmark (Danish)", "Norway (Norwegian)"},
-    "group a": {"Spain", "France (French)", "Poland (Polish)"},
-    "group b": {
-        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
-        "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
-        "Israel (Hebrew)", "Bulgaria (Bulgarian)"
-    },
-    "group c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)",
-                "Denmark (Danish)", "Norway (Norwegian)"},
-    "mena": {"Middle East (Arabic - MSA)"},
-    "nordics": {"Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
     "tier a": {"Spain", "France (French)", "Poland (Polish)"},
+    "group a": {"Spain", "France (French)", "Poland (Polish)"},
     "tier b": {
         "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },
-    "tier c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)",
-                "Denmark (Danish)", "Norway (Norwegian)"},
+    "b": {
+        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
+        "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
+        "Israel (Hebrew)", "Bulgaria (Bulgarian)"
+    },
+    "group b": {
+        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
+        "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
+        "Israel (Hebrew)", "Bulgaria (Bulgarian)"
+    },
+    "tier c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
+    "c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
+    "group c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
+    "mena": {"Middle East (Arabic - MSA)"},
+    "nordics": {"Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
 }
 
 EXCLUDE_NOTE_PATTERNS = [

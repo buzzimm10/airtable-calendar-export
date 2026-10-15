@@ -29,6 +29,7 @@ FULL_CALENDAR_COUNTRY_ROW_RANGES = {
     3: (120, 136),
     4: (173, 189),
     5: (226, 242),
+    6: (279, 295),
 }
 
 FULL_CALENDAR_WEEKLY_COUNT_COL = 33  # AG
@@ -49,6 +50,7 @@ OVERVIEW_WEEK_LAYOUT = {
     3: {"header_row": 48, "date_row": 49, "event_rows": (50, 51), "base_row": 52, "end_row": 68},
     4: {"header_row": 70, "date_row": 71, "event_rows": (72, 73), "base_row": 74, "end_row": 90},
     5: {"header_row": 92, "date_row": 93, "event_rows": (94, 95), "base_row": 96, "end_row": 112},
+    6: {"header_row": 114, "date_row": 115, "event_rows": (116, 117), "base_row": 118, "end_row": 134},
 }
 
 BASE_DAY_TEMPLATE = {

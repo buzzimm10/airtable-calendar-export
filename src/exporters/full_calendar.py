@@ -220,6 +220,43 @@ def write_week_label(ws, block, week_number_value: str):
         alignment=Alignment(horizontal='center', vertical='center', wrap_text=True),
     )
 
+def get_target_columns(day_name, programming_count, mediaplanning_count):
+    from config.layouts import DAY_LAYOUT
+    
+    # Extraemos y ordenamos las columnas de izquierda a derecha (0, 1, 2, 3)
+    all_cols = sorted([col for _, col in DAY_LAYOUT[day_name]])
+    
+    p_count = min(programming_count, 4)
+    m_count = min(mediaplanning_count, 4 - p_count)
+    
+    # Asignación inteligente:
+    # Programming prefiere los slots: 0, 1, 2, 3
+    prog_slots = [0, 1, 2, 3][:p_count]
+    prog_cols = [all_cols[i] for i in prog_slots]
+    
+    # Mediaplanning prefiere los slots: 2, 1, 0, 3 (Ignorando los que Programming ya tomó)
+    remaining_slots = [i for i in [2, 1, 0, 3] if i not in prog_slots]
+    media_slots = remaining_slots[:m_count]
+    media_cols = [all_cols[i] for i in media_slots]
+    
+    used_slots = set(prog_slots + media_slots)
+    
+    uk_cols = []
+    # El slot 3 (YT TEAM UK) se mantiene intacto si no se necesitan los 4 slots
+    if 3 not in used_slots:
+        uk_cols = [all_cols[3]]
+        used_slots.add(3)
+        
+    extra_cols = [all_cols[i] for i in [0, 1, 2, 3] if i not in used_slots]
+    
+    return {"Programming": prog_cols, "Mediaplanning": media_cols, "UK": uk_cols, "Extra": extra_cols}
+
+def write_owner_row(ws, owner_row, day_name, column_map):
+    for col in column_map["Programming"]: safe_set_value(ws, owner_row, col, "PROGRAMMING HUB", alignment=center_wrap())
+    for col in column_map["Mediaplanning"]: safe_set_value(ws, owner_row, col, "MEDIAPLANNING HUB", alignment=center_wrap())
+    for col in column_map["UK"]: safe_set_value(ws, owner_row, col, "YT TEAM UK", alignment=center_wrap())
+    for col in column_map["Extra"]: safe_set_value(ws, owner_row, col, "", alignment=center_wrap())
+
 def rewrite_full_calendar_owner_row(ws, block: WeekBlock, day_layout):
     """
     Fill OWNER row according to fixed columns in each day.

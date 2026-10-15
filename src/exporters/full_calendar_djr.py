@@ -445,7 +445,7 @@ def export_metadata_spain(wb, records, first_monday):
     except: pass
     ws_meta.merge_cells(start_row=7, start_column=4, end_row=7, end_column=7)
 
-    META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47}
+    META_WEEKS = {1: 7, 2: 17, 3: 27, 4: 37, 5: 47, 6: 57}
     prog_records = [r for r in records if hub_role(r.get("fields", r).get(AT_FIELDS["owner_hub"])) == "Programming"]
     buckets = aggregate_by_visual_week_day_role(prog_records, first_monday)
 

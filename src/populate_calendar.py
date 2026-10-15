@@ -4,7 +4,7 @@ Populate the 'FULL CALENDAR YT DC EMEA' sheet of an existing Excel template
 from Airtable (or local JSON) using openpyxl.
 
 PATCHES (2026-03-25):
-- Week label: write "WEEK <Week Number (Year)>" into merged cells B6, B60, B114, B168, B222 (per week block).
+- Week label: write "WEEK <Week Number (Year)>" into merged cells B6, B60, B114, B168, B222, B276 (per week block).
   Value inferred from Airtable records of that week; fallback to ISO week from Monday date.
 - Countries by Hub: keep writing YES/NO in the correct hub column; uniform font
   (YES black, NO red; Italy always red).
@@ -53,7 +53,6 @@ from core.dates import (
     first_visible_monday_of_target_month,
     full_calendar_anchor_dates_from_records,
     month_name_from_records,
-    resolve_target_month_year,
 )
 from core.filters import (
     filter_records_by_brand,
@@ -67,15 +66,40 @@ from core.airtable_client import (
 )
 from services.planner_service import load_and_filter_records, aggregate_by_week_day_and_role
 
+# --- SLOTS INTELIGENTES PARA DISNEY CHANNEL ---
+def get_target_columns(day_name, programming_count, mediaplanning_count, original_day_cols):
+    all_cols = original_day_cols[day_name]
+    
+    p_count = min(programming_count, 4)
+    m_count = min(mediaplanning_count, 4 - p_count)
+    
+    prog_slots = [0, 1, 2, 3][:p_count]
+    prog_cols = [all_cols[i] for i in prog_slots]
+    
+    remaining_slots = [i for i in [2, 1, 0, 3] if i not in prog_slots]
+    media_slots = remaining_slots[:m_count]
+    media_cols = [all_cols[i] for i in media_slots]
+    
+    used_slots = set(prog_slots + media_slots)
+    
+    uk_cols = []
+    if 3 not in used_slots:
+        uk_cols = [all_cols[3]]
+        used_slots.add(3)
+        
+    extra_cols = [all_cols[i] for i in [0, 1, 2, 3] if i not in used_slots]
+    
+    return {"Programming": prog_cols, "Mediaplanning": media_cols, "UK": uk_cols, "Extra": extra_cols}
+# -----------------------------------------------
+
 def populate_calendar(template_path: str, output_path: str, records: List[Dict],
                       channel: str = "Disney Channel", 
                       week_anchor_cells: Optional[List[str]] = None,
                       enable_mediaplanning: bool = True,
                       anchor_dates_override: Optional[List[str]] = None,
                       channel_id_to_name_map: Optional[Dict[str, str]] = None,
-                      selected_countries: Optional[List[str]] = None): # <-- NUEVO
+                      selected_countries: Optional[List[str]] = None):
 
-    # --- ROUTER: Delegar Disney Junior a su propio Exporter ---
     if channel == "Disney Junior":
         logging.info("Routing to Disney Junior dedicated exporter...")
         populate_calendar_djr(
@@ -86,7 +110,6 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             channel_id_to_name_map=channel_id_to_name_map
         )
         
-        # ---> FASE 2: CALENDARIOS LOCALES (DJR) <---
         zip_path = None
         if selected_countries != []:
             target_year, target_month = resolve_target_month_year(records)
@@ -97,19 +120,17 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
                 channel_type="DJR",
                 selected_countries=selected_countries,
                 month_str=m_str,
-                records=records,                                  # <--- AÑADE ESTA LÍNEA
-                channel_id_to_name_map=channel_id_to_name_map     # <--- AÑADE ESTA LÍNEA
+                records=records,
+                channel_id_to_name_map=channel_id_to_name_map
             )
-        return zip_path  # Retornamos el zip para Streamlit
-    # -------------------------------------------------------
+        return zip_path
 
     # === LÓGICA DE EXPORTACIÓN PARA DISNEY CHANNEL ===
-    week_anchor_cells = week_anchor_cells or ["D6", "D60", "D114", "D168", "D222"]
+    week_anchor_cells = week_anchor_cells or ["D6", "D60", "D114", "D168", "D222", "D276"]
     if channel_id_to_name_map is None:
         channel_id_to_name_map = {}
 
     wb = load_workbook(template_path, data_only=False)
-
     active_target_sheet = "FULL CALENDAR YT DC EMEA"
 
     if active_target_sheet not in wb.sheetnames:
@@ -122,15 +143,14 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
 
     anchor_dates_map = full_calendar_anchor_dates_from_records(records)
 
-    # --- PARCHE PARA SOBRESCRIBIR LAS COORDENADAS ANTIGUAS DE CORE/DATES.PY ---
+    # PARCHE COORDENADAS: Añadida la Semana 6 (D276)
     if anchor_dates_map and channel == "Disney Channel":
-        new_coords = ["D6", "D60", "D114", "D168", "D222"]
+        new_coords = ["D6", "D60", "D114", "D168", "D222", "D276"]
         updated_map = {}
         for idx, (old_addr, date_val) in enumerate(anchor_dates_map.items()):
             if idx < len(new_coords):
                 updated_map[new_coords[idx]] = date_val
         anchor_dates_map = updated_map
-    # -------------------------------------------------------------------------
 
     if not anchor_dates_map:
         anchor_dates_map = get_anchor_dates_from_values_wb(template_path, week_anchor_cells)
@@ -143,6 +163,12 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
         write_full_calendar_start_date(ws, start_monday)
 
     target_year, target_month = resolve_target_month_year(records)
+
+    # Guardamos una copia segura de las columnas base del Layout
+    ORIGINAL_DAY_COLS = {
+        day: sorted([col for _, col in DAY_LAYOUT[day]])
+        for day in DAY_ORDER
+    }
 
     for mon_date, block in blocks.items():
         logging.info(f"Processing week block starting {block.monday_date} at row {block.anchor_row}...")
@@ -158,8 +184,21 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             per_day_role_records[(day_name, "Mediaplanning")] = media if enable_mediaplanning else []
             per_day_all_roles[day_name] = prog + (media if enable_mediaplanning else [])
 
+            # --- HACK DINÁMICO: Reescribimos el DAY_LAYOUT en memoria ---
+            column_map = get_target_columns(day_name, len(prog), len(media if enable_mediaplanning else []), ORIGINAL_DAY_COLS)
+            new_day_layout = []
+            for col in column_map["Programming"]: new_day_layout.append(("Programming", col))
+            for col in column_map["Mediaplanning"]: new_day_layout.append(("Mediaplanning", col))
+            for col in column_map["UK"]: new_day_layout.append(("UK", col))
+            for col in column_map["Extra"]: new_day_layout.append(("Extra", col))
+            
+            DAY_LAYOUT[day_name] = new_day_layout
+            # -------------------------------------------------------------
+
         week_num_text = infer_week_number_for_block(per_day_all_roles, block.monday_date)
         write_week_label(ws, block, week_num_text)
+        
+        # Ahora que DAY_LAYOUT tiene los slots inteligentes de esta semana, escribimos cabeceras y contenidos
         rewrite_full_calendar_owner_row(ws, block, DAY_LAYOUT)
 
         for day_name in DAY_ORDER:
@@ -193,18 +232,16 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
     elif output_path.lower().endswith(".xltx"):
         wb.template = True
     cleanup_stale_merged_cells(ws) 
+    
     # ---> CAMBIAR NOMBRE PESTAÑA HIGHLIGHTS Y FECHA E4 <---
     from datetime import date
     month_name_upper = month_name_from_records(records).capitalize()
-    month_abbr = month_name_upper[:3] # <-- MAX 31 CARACTERES PARA EVITAR CORRUPCIÓN
+    month_abbr = month_name_upper[:3] 
     
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
-            # 1. Cambiar nombre de la pestaña de forma segura
             new_title = f"YT DC EMEA {month_abbr} Highlights"
             wb[sn].title = new_title
-            
-            # 2. Inyectar la fecha en E4 de forma segura
             if target_year and target_month:
                 ws_high = wb[new_title]
                 safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="mmm-yy")
@@ -224,8 +261,8 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             selected_countries=selected_countries,
             month_str=m_str,
             dc_blocks=blocks,
-            records=records, # <-- PASAMOS LA DATA
-            channel_id_to_name_map=channel_id_to_name_map # <-- PASAMOS EL MAPA
+            records=records,
+            channel_id_to_name_map=channel_id_to_name_map 
         )
     
     logging.info("Done.")
@@ -241,7 +278,7 @@ def main():
     parser.add_argument("--airtable-table", help="Airtable Table ID or name.")
     parser.add_argument("--airtable-view", help="Optional Airtable view name.")
     parser.add_argument("--json", help="Optional path to local JSON export instead of API.")
-    parser.add_argument("--anchors", nargs="*", help="Override weekly anchor cells, e.g., D6 D59 D112 D165 D218.")
+    parser.add_argument("--anchors", nargs="*", help="Override weekly anchor cells, e.g., D6 D59 D112 D165 D218 D276.")
     parser.add_argument("--anchor-dates", nargs="*", help="Optional ISO dates for anchors.")
     parser.add_argument("--disable-mediaplanning", action="store_true", help="If set, do not populate Mediaplanning Hub content.")
     parser.add_argument("--countries", nargs="*", help="Lista específica de países a exportar para los calendarios locales.")
@@ -264,27 +301,19 @@ def main():
     if view: view = view.strip()
     logging.debug(f"Using Airtable base={base_id!r} table={table_id!r} view={view!r}")
 
-    # Manejo de ENABLE_MEDIAPLANNING (env) si no usas el flag para desactivarlo
     enable_mediaplanning = not args.disable_mediaplanning
     env_mp = os.getenv("ENABLE_MEDIAPLANNING")
     if env_mp is not None and not args.disable_mediaplanning:
         enable_mediaplanning = env_mp.strip().lower() in ("1", "true", "yes", "y", "on")
 
-    # (Opcional futuro) COUNTRY_SECTION está en .env. Tu script actualmente siempre escribe ambas
-    # secciones. Si lo reactivas, podrías leerlo así:
-    # country_section = (os.getenv("COUNTRY_SECTION") or "both").strip().lower()
-
     logging.basicConfig(stream=sys.stdout, level=getattr(logging, args.log_level.upper(), logging.INFO),
                         format="%(levelname)s: %(message)s")
 
-    # Fuente de datos: JSON o Airtable
     channel_id_to_name_map = {}
 
     if args.json:
         logging.info(f"Loading records from JSON: {args.json}")
         records = load_local_json(args.json)
-
-        # Even with local JSON, try to resolve linked YouTube Channel IDs if Airtable creds exist
         if token and base_id:
             logging.info("Loading channel mappings from Airtable...")
             channel_id_to_name_map = fetch_channel_id_to_name_map(token, base_id)
@@ -309,7 +338,6 @@ def main():
 
     logging.info(f"Fetched {len(records)} records from Airtable/JSON source")
 
-    # Filtros (Channel/Month) permanecen igual
     logging.info(f"Before filters: {len(records)} records")
 
     records = filter_records_by_brand(records, args.channel)
@@ -325,20 +353,26 @@ def main():
         log_level=args.log_level,
     )
 
-    week_anchors = args.anchors if args.anchors else ["D6", "D60", "D114", "D168", "D222"]
+    # Añadida la Semana 6 (D276)
+    week_anchors = args.anchors if args.anchors else ["D6", "D60", "D114", "D168", "D222", "D276"]
     template_path = args.template or str(template_config["template_path"])
-    week_anchors = args.anchors if args.anchors else template_config["week_anchor_cells"]
+    
+    if args.anchors:
+        week_anchors = args.anchors
+    elif "week_anchor_cells" in template_config:
+        config_anchors = template_config["week_anchor_cells"]
+        week_anchors = config_anchors if len(config_anchors) >= 6 else ["D6", "D60", "D114", "D168", "D222", "D276"]
 
     populate_calendar(
         template_path=template_path,
         output_path=args.output,
         records=records,
-        channel=args.channel, # <-- NUEVO
+        channel=args.channel,
         week_anchor_cells=week_anchors,
         enable_mediaplanning=enable_mediaplanning,
         anchor_dates_override=args.anchor_dates,
         channel_id_to_name_map=channel_id_to_name_map,
-        selected_countries=args.countries, # <-- NUEVO
+        selected_countries=args.countries,
     )
 
 if __name__ == "__main__":

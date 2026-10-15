@@ -241,8 +241,7 @@ def normalize_overview_region(region_val) -> str:
     """
     Format Region for MONTHLY OVERVIEW display.
     Examples:
-    - ['Tier A', 'Tier B', 'Tier C'] -> TIER A, B & C
-    - ['Tier A', 'Tier C'] -> TIER A & C
+    - ['Tier A', 'Tier S', 'Tier C'] -> TIER S, A & C
     - Spain Only -> SPAIN ONLY
     """
     if isinstance(region_val, list):
@@ -267,13 +266,16 @@ def normalize_overview_region(region_val) -> str:
     tier_letters = []
     other_items = []
     for item in items_upper:
-        m = re.match(r"^TIER\s+([ABC])$", item)
+        # AHORA RECONOCE LA LETRA S
+        m = re.match(r"^TIER\s+([SABCD])$", item)
         if m:
             tier_letters.append(m.group(1))
         else:
             other_items.append(item)
 
-    tier_letters = list(dict.fromkeys(tier_letters))  # preserve order, remove dupes
+    # FORZAR EL ORDEN EXACTO (S, A, B, C)
+    tier_order = {"S": 1, "A": 2, "B": 3, "C": 4, "D": 5}
+    tier_letters = sorted(list(dict.fromkeys(tier_letters)), key=lambda x: tier_order.get(x, 99))
 
     tier_text = ""
     if tier_letters:

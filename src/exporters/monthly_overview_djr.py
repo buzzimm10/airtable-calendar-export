@@ -34,6 +34,7 @@ DJR_OVERVIEW_WEEK_LAYOUT = {
     3: {"date_row": 31, "full_eps": 32, "exclusive": 33, "lifts": 34, "compilations": 35, "live": 36, "interactive": 37, "podcast": 38, "vertical_rows": (39, 40)},
     4: {"date_row": 42, "full_eps": 43, "exclusive": 44, "lifts": 45, "compilations": 46, "live": 47, "interactive": 48, "podcast": 49, "vertical_rows": (50, 51)},
     5: {"date_row": 53, "full_eps": 54, "exclusive": 55, "lifts": 56, "compilations": 57, "live": 58, "interactive": 59, "podcast": 60, "vertical_rows": (61, 62)},
+    6: {"date_row": 64, "full_eps": 65, "exclusive": 66, "lifts": 67, "compilations": 68, "live": 69, "interactive": 70, "podcast": 71, "vertical_rows": (72, 73)},
 }
 
 # --- ACTUALIZADO: Color FFC9C9 añadido para interactive ---

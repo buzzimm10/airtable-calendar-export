@@ -111,7 +111,7 @@ def overview_visual_position(live_date: date, first_monday: date) -> Optional[Tu
         return None
 
     visual_week = (delta_days // 7) + 1
-    if visual_week < 1 or visual_week > 5:
+    if visual_week < 1 or visual_week > 6:  # <-- EL ARREGLO ESTÁ AQUÍ (antes decía 5)
         return None
 
     day_name = DAY_ORDER[live_date.weekday()]

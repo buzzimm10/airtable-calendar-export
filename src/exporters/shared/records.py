@@ -26,7 +26,9 @@ def aggregate_by_visual_week_day_role(records: List[Dict], first_monday: date):
             continue
 
         week_index = (delta_days // 7) + 1
-        if week_index < 1 or week_index > 5:
+        
+        # --- EL FIX ESTÁ AQUÍ: Ahora permite hasta la semana 6 ---
+        if week_index < 1 or week_index > 6:
             continue
 
         day_name = DAY_ORDER[live_date.weekday()]

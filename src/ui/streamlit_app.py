@@ -128,7 +128,7 @@ with st.sidebar:
     selected_countries = []
     if export_individual:
         country_options = dc_countries if channel == "Disney Channel" else djr_countries
-        country_options = [c for c in country_options if c.lower() not in ["spain", "españa"]]
+        country_options = list(country_options)
         
         # MAGIA UI: Lo metemos en un acordeón desplegable
         with st.expander("🌍 Seleccionar Países (Haz clic para abrir/cerrar)", expanded=True):

@@ -209,18 +209,25 @@ def auto_adjust_djr_overview_heights(ws):
             ws.row_dimensions[row].height = max(ws.row_dimensions[row].height or 15, 42)
 
 def is_country_match(target_country: str, included_list: set) -> bool: 
-    if not target_country: return True
-    tc = target_country.lower().split("(")[0].strip()
+    if not target_country: 
+        return True
+    
+    tc = re.sub(r'\s*\(.*?\)', '', str(target_country)).strip().lower()
     
     aliases = {
-        "GERMANY": ["GSA", "GERMAN"],
-        "TÜRKIYE": ["TURKEY", "TUKEY"],
-        "SPAIN": ["ESPAÑA"]
+        "spain": ["españa", "es"],
+        "españa": ["spain", "es"],
+        "germany": ["gsa", "german"],
+        "gsa": ["germany", "german"],
+        "türkiye": ["turkey", "tukey", "tr"],
+        "turkey": ["türkiye", "tukey", "tr"],
+        "middle east": ["mena", "arabic"],
+        "mena": ["middle east", "arabic"],
     }
-    match_list = [tc] + aliases.get(tc.upper(), [])
+    match_list = [tc] + aliases.get(tc, [])
     
     for inc in included_list:
-        ic = str(inc).lower().split("(")[0].strip()
+        ic = re.sub(r'\s*\(.*?\)', '', str(inc)).strip().lower()
         for t in match_list:
             if t == ic or t in ic or ic in t:
                 return True

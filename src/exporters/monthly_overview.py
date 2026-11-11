@@ -395,12 +395,29 @@ def write_overview_events(ws, records: List[Dict]):
 
 import re
 
-def is_country_match(target_country: str, included_list: set) -> bool: # <-- Cambiado de List[str] a set
-    if not target_country: return True
-    target_clean = re.sub(r'\s*\(.*?\)', '', target_country).strip().upper()
-    for c in included_list:
-        if target_clean == re.sub(r'\s*\(.*?\)', '', str(c)).strip().upper():
-            return True
+def is_country_match(target_country: str, included_list: set) -> bool: 
+    if not target_country: 
+        return True
+    
+    tc = re.sub(r'\s*\(.*?\)', '', str(target_country)).strip().lower()
+    
+    aliases = {
+        "spain": ["españa", "es"],
+        "españa": ["spain", "es"],
+        "germany": ["gsa", "german"],
+        "gsa": ["germany", "german"],
+        "türkiye": ["turkey", "tukey", "tr"],
+        "turkey": ["türkiye", "tukey", "tr"],
+        "middle east": ["mena", "arabic"],
+        "mena": ["middle east", "arabic"],
+    }
+    match_list = [tc] + aliases.get(tc, [])
+    
+    for inc in included_list:
+        ic = re.sub(r'\s*\(.*?\)', '', str(inc)).strip().lower()
+        for t in match_list:
+            if t == ic or t in ic or ic in t:
+                return True
     return False
 
 def populate_monthly_overview(

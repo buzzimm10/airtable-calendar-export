@@ -18,6 +18,46 @@ from config.layouts_djr import DJR_WEEK_LAYOUT as djr_layout
 from config.layouts_djr import DJR_DAY_LAYOUT as djr_day
 from core.excel_utils import safe_set_value
 
+COUNTRY_SHEET_CODES = {
+    "middle east": "MENA",
+    "middle east (arabic - msa)": "MENA",
+    "mena": "MENA",
+    "netherlands": "NLD",
+    "netherlands (dutch)": "NLD",
+    "belgium": "BEL",
+    "belgium (french)": "BEL",
+    "portugal": "PT",
+    "spain": "ES",
+    "españa": "ES",
+    "italy": "IT",
+    "italy (italian)": "IT",
+    "france": "FR",
+    "germany": "GSA",
+    "gsa (german)": "GSA",
+    "poland": "PL",
+    "poland (polish)": "PL",
+    "romania": "RO",
+    "romania (romanian)": "RO",
+    "greece": "GR",
+    "greece (greek)": "GR",
+    "israel": "IL",
+    "israel (hebrew)": "IL",
+    "bulgaria": "BG",
+    "bulgaria (bulgarian)": "BG",
+    "turkey": "TR",
+    "türkiye": "TR",
+    "hungary": "HU",
+    "hungary (hungarian)": "HU",
+    "czech r.": "CZ",
+    "czech r. (czech)": "CZ",
+    "sweden": "SE",
+    "sweden (swedish)": "SE",
+    "denmark": "DK",
+    "denmark (danish)": "DK",
+    "norway": "NO",
+    "norway (norwegian)": "NO",
+}
+
 def get_clean_country_name(name: str) -> str:
     return re.sub(r'\s*\(.*?\)', '', name).strip()
 
@@ -94,8 +134,17 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
             cell = sheet.cell(row=row_idx, column=c)
             if isinstance(cell, Cell): cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
+    def get_sheet_country_code(country_name: str) -> str:
+        clean = country_name.lower().strip()
+        # Buscar coincidencia directa o aproximada
+        for key, code in COUNTRY_SHEET_CODES.items():
+            if key in clean or clean in key:
+                return code
+        # Fallback: limpiar paréntesis y tomar primeras 4 letras
+        clean_fallback = re.sub(r'\s*\(.*?\)', '', country_name).strip().upper()
+        return clean_fallback[:4]
+
     for country in selected_countries:
-        if country.lower() in ["spain", "españa"]: continue
         country_wb = load_workbook(master_path, data_only=False)
         clean_country = get_clean_country_name(country)
         
@@ -332,10 +381,14 @@ def generate_local_calendars(master_path: str, output_dir: str, channel_type: st
                         v = c_obj.value
                         if isinstance(v, str) and "EMEA" in v: c_obj.value = v.replace("EMEA", clean_country.upper())
         
+        # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY CODE ---
+        country_code = get_sheet_country_code(country)
+
         for sn in country_wb.sheetnames:
             if "EMEA" in sn:
-                new_title = sn.replace("EMEA", clean_country.upper())
-                country_wb[sn].title = new_title[:31] 
+                new_title = sn.replace("EMEA", country_code)
+                # Garantía de longitud máxima
+                country_wb[sn].title = new_title[:31]
 
         filename = f"{month_num}_Social Media Calendar {brand_label} YouTube {clean_country} - {month_name_year}.xlsx"
         output_path = os.path.join(output_dir, filename)

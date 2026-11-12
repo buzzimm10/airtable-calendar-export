@@ -314,12 +314,15 @@ def populate_monthly_overview_djr(
     auto_adjust_djr_overview_heights(ws)
 
     _, t_month = resolve_target_month_year(records)
-    if t_month:
+    if t_month and first_monday:
+        out_of_month_fill = PatternFill(fill_type="lightDown", fgColor="FF000000", bgColor="FFD9D9D9")
         for week_num, layout in DJR_OVERVIEW_WEEK_LAYOUT.items():
             w_mon = first_monday + timedelta(days=(week_num - 1) * 7)
             w_sun = w_mon + timedelta(days=6)
+
+            # Si toda la semana está fuera del mes (ej. semana 6 en diciembre), ocultarla sin tocar B61:C62
             if w_mon.month != t_month and w_sun.month != t_month:
-                start_hide = max(1, layout["date_row"] - 2)
+                start_hide = max(1, layout["date_row"] - 1)
                 end_hide = layout["vertical_rows"][1]
                 for m in list(ws.merged_cells.ranges):
                     if start_hide <= m.min_row <= end_hide or start_hide <= m.max_row <= end_hide:
@@ -330,5 +333,21 @@ def populate_monthly_overview_djr(
                 for r_hide in range(start_hide, end_hide + 1):
                     ws.row_dimensions[r_hide].hidden = True
                     ws.row_dimensions[r_hide].height = 0
+                continue
+
+            # Aplicar textura de líneas diagonales en días individuales fuera del mes
+            content_rows = [
+                layout["full_eps"], layout["exclusive"], layout["lifts"],
+                layout["compilations"], layout["live"], layout["interactive"],
+                layout["podcast"], layout["vertical_rows"][0], layout["vertical_rows"][1],
+            ]
+            for day_idx, day_name in enumerate(DAY_ORDER):
+                col = DJR_OVERVIEW_DAY_COLS[day_name]
+                cur_date = w_mon + timedelta(days=day_idx)
+                if cur_date.month != t_month:
+                    for r_c in content_rows:
+                        c_obj = get_writable_cell(ws, r_c, col)
+                        if not c_obj.value:
+                            c_obj.fill = out_of_month_fill
 
     logging.info(f"Finished populating '{overview_sheet_name}'.")

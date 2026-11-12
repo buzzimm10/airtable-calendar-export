@@ -2,6 +2,7 @@ import os
 import glob
 import zipfile
 import re
+from copy import copy
 from typing import Dict, List, Optional, Set, Tuple
 from datetime import datetime, date, timedelta
 
@@ -251,6 +252,12 @@ def _populate_translation_calendar(
         return
     ws = wb[fc_sheet]
 
+    # Capturar los rellenos nativos de fecha y deadline antes de tocar celdas
+    ref_date_row = 7 if is_djr else 222
+    ref_dl_row = 8 if is_djr else 223
+    in_month_date_fill = copy(ws.cell(row=ref_date_row, column=4).fill)
+    in_month_dl_fill = copy(ws.cell(row=ref_dl_row, column=4).fill)
+
     brand_full = "DISNEY JUNIOR" if is_djr else "DISNEY CHANNEL"
     end_header_col = 47 if is_djr else 54  # AU=47 en DJR, BB=54 en DC
     _ensure_merged_range(ws, 1, 2, 2, end_header_col)
@@ -263,7 +270,6 @@ def _populate_translation_calendar(
     else:
         _set_cell_keep_merge(ws, 3, 2, month_name_upper, alignment=center_wrap())
 
-    # Fecha lunes inicial en D6 (DC) o D7 (DJR) con formato largo ("lunes, 30 de noviembre de 2026")
     start_date_row = 7 if is_djr else 6
     if first_monday:
         _set_cell_keep_merge(ws, start_date_row, 4, first_monday, alignment=center_wrap(), number_format=LONG_DATE_FMT)
@@ -334,7 +340,6 @@ def _populate_translation_calendar(
         week_monday = (first_monday + timedelta(days=w_idx * 7)) if first_monday else None
         week_sunday = (week_monday + timedelta(days=6)) if week_monday else None
 
-        # Si toda la semana cae fuera del mes (ej. semana 6 de diciembre = enero), ocultarla por completo
         if (
             week_monday is not None
             and week_sunday is not None
@@ -346,7 +351,6 @@ def _populate_translation_calendar(
                 rows_to_hide_and_clear.add(r_h)
             continue
 
-        # Asegurar merges de cabecera de esta semana sin solapamientos
         if not is_djr:
             _ensure_merged_range(ws, r_date, 2, r_date, 3)
         _ensure_merged_range(ws, r_country, 2, r_country, 3)
@@ -374,7 +378,6 @@ def _populate_translation_calendar(
             per_day_media[d_name] = m_recs
             per_day_all[d_name] = p_recs + m_recs
 
-        # Número de semana: "WEEK YYYY-WXX" en DC; "WEEK" en B y número en C para DJR
         if week_monday is not None:
             if is_djr:
                 _set_cell_keep_merge(ws, r_date, 2, "WEEK", alignment=center_wrap())
@@ -392,13 +395,11 @@ def _populate_translation_calendar(
             if current_date is not None and target_year is not None and target_month is not None:
                 in_month = (current_date.year == target_year and current_date.month == target_month)
 
-            # Aplicar formato largo de fecha ("dddd, dd mmmm yyyy") en la celda de fecha del día (conserva fórmula =D6+1)
             date_cell = ws.cell(row=r_date, column=c_start)
             if isinstance(date_cell, Cell):
                 date_cell.number_format = LONG_DATE_FMT
                 date_cell.alignment = center_wrap()
 
-            # Actualizar fecha DEADLINE del día con el mismo formato largo ("dddd, dd mmmm yyyy")
             if current_date is not None:
                 dl_val = earliest_deadline_for_day(per_day_all[d_name]) or (current_date - timedelta(days=7))
                 _set_cell_keep_merge(ws, r_dl, c_start, dl_val, alignment=center_wrap(), number_format=LONG_DATE_FMT)
@@ -411,14 +412,18 @@ def _populate_translation_calendar(
                         cell.value = None
 
                 if not in_month:
-                    for r_shade in (r_owner, r_prop, r_ctype, r_title, r_syn, r_strat, r_country):
-                        ws.cell(row=r_shade, column=c).fill = fill_out_month
+                    # Días fuera de mes: gris en TODAS las filas incluyendo fecha (r_date) y deadline (r_dl)
+                    for r_shade in (r_date, r_dl, r_owner, r_prop, r_ctype, r_title, r_syn, r_strat, r_country):
+                        ws.cell(row=r_shade, column=c).fill = copy(fill_out_month)
                     if is_trans:
                         c_own_out = ws.cell(row=r_owner, column=c)
                         if isinstance(c_own_out, Cell):
                             c_own_out.value = lang_header
                         c_own_out.alignment = center_wrap()
                 else:
+                    # Días dentro del mes: restaurar color nativo en fecha (r_date) y deadline (r_dl)
+                    ws.cell(row=r_date, column=c).fill = copy(in_month_date_fill)
+                    ws.cell(row=r_dl, column=c).fill = copy(in_month_dl_fill)
                     if is_trans:
                         c_own = ws.cell(row=r_owner, column=c)
                         if isinstance(c_own, Cell):
@@ -497,7 +502,6 @@ def _populate_translation_calendar(
             for idx, rec in enumerate(per_day_media[d_name][:len(col_map["Mediaplanning"])]):
                 _write_slot(col_map["Mediaplanning"][idx], rec)
 
-    # Ocultar semanas fuera de mes
     for m in list(ws.merged_cells.ranges):
         if m.min_row in rows_to_hide_and_clear or m.max_row in rows_to_hide_and_clear:
             try:
@@ -514,7 +518,7 @@ def _populate_translation_calendar(
             cell.fill = PatternFill(fill_type=None)
             cell.border = Border()
 
-    # 3. Actualizar MONTHLY OVERVIEW local y su cabecera (conservando merge B2:J2 / B5:J5)
+    # 3. Actualizar MONTHLY OVERVIEW local y su cabecera
     if records:
         if is_djr:
             from exporters.monthly_overview_djr import populate_monthly_overview_djr
@@ -705,7 +709,6 @@ def generate_local_calendars(
                 if len(day_cols) >= 4:
                     uk_col_letter = get_column_letter(day_cols[3])
                     ws.column_dimensions[uk_col_letter].width = 22
-            # Aplicar formato largo de fecha ("dddd, dd mmmm yyyy") en DJR Full Calendar
             for layout in djr_layout.values():
                 for r_fmt in (layout.get("date_row"), layout.get("deadline_row")):
                     if isinstance(r_fmt, int):

@@ -85,8 +85,14 @@ def get_target_columns(day_name, programming_count, mediaplanning_count, origina
 def write_owner_row(ws, owner_row, day_name, column_map):
     for col in column_map["Programming"]: safe_set_value(ws, owner_row, col, "PROGRAMMING HUB", alignment=center_wrap())
     for col in column_map["Mediaplanning"]: safe_set_value(ws, owner_row, col, "MEDIAPLANNING HUB", alignment=center_wrap())
+    # El cuarto slot SIEMPRE será UK a menos que Mediaplanning lo haya empujado fuera
     for col in column_map["UK"]: safe_set_value(ws, owner_row, col, "YT TEAM UK", alignment=center_wrap())
-    for col in column_map["Extra"]: safe_set_value(ws, owner_row, col, "", alignment=center_wrap())
+    # Extra slots que queden vacíos por defecto dicen YT TEAM UK si están en la última posición, sino quedan en blanco
+    for col in column_map["Extra"]: 
+        if col == max(column_map["Programming"] + column_map["Mediaplanning"] + column_map["UK"] + column_map["Extra"]):
+            safe_set_value(ws, owner_row, col, "YT TEAM UK", alignment=center_wrap())
+        else:
+            safe_set_value(ws, owner_row, col, "", alignment=center_wrap())
 
 def write_asset_to_col_dc(ws, block, col, record):
     single = assemble_text_for_single_asset(record)
@@ -287,8 +293,12 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             new_title = f"YT DC EMEA {month_abbr} Highlights"
             wb[sn].title = new_title
             if target_year and target_month:
-                ws_high = wb[new_title]
-                safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="mmm-yy")
+                ws_hi = wb[new_title]
+                # Escribir en E3 (Disney Channel y Junior)
+                safe_set_value(ws_hi, 3, 5, date(target_year, target_month, 1), number_format="mmm-yy")
+                # Escribir en E4 el formato mes-año como texto si es necesario
+                d_str = date(target_year, target_month, 1).strftime("%b-%y").lower()
+                safe_set_value(ws_hi, 4, 5, d_str)
 
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)

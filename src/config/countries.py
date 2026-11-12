@@ -169,23 +169,32 @@ REGION_PRESETS = {
     "tier a": {"Spain", "France (French)", "Poland (Polish)"},
     "group a": {"Spain", "France (French)", "Poland (Polish)"},
     "tier b": {
-        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
+        "Portugal", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },
     "b": {
-        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
+        "Portugal", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },
     "group b": {
-        "Portugal", "Italy (Italian)", "Romania (Romanian)", "Greece (Greek)",
+        "Portugal", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },
-    "tier c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
-    "c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
-    "group c": {"Hungary (Hungarian)", "Czech R. (Czech)", "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
+    "tier c": {
+        "Italy (Italian)", "Hungary (Hungarian)", "Czech R. (Czech)",
+        "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"
+    },
+    "c": {
+        "Italy (Italian)", "Hungary (Hungarian)", "Czech R. (Czech)",
+        "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"
+    },
+    "group c": {
+        "Italy (Italian)", "Hungary (Hungarian)", "Czech R. (Czech)",
+        "Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"
+    },
     "mena": {"Middle East (Arabic - MSA)"},
     "nordics": {"Sweden (Swedish)", "Denmark (Danish)", "Norway (Norwegian)"},
 }

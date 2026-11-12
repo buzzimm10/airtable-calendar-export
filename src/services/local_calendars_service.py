@@ -35,7 +35,6 @@ from services.planner_service import (
 from exporters.shared.records import aggregate_by_visual_week_day_role
 from exporters.full_calendar import infer_week_number_for_block
 
-# Códigos cortos oficiales para nombres de pestañas (máx. 31 caracteres en Excel)
 COUNTRY_SHEET_CODES = {
     "middle east": "MENA",
     "middle east (arabic - msa)": "MENA",
@@ -77,15 +76,14 @@ COUNTRY_SHEET_CODES = {
     "norway (norwegian)": "NO",
 }
 
-# Columnas exactas de contenido (1-based) en las plantillas con columnas de traducción
 DC_TRANS_CONTENT_COLS = {
-    "Monday":    [4, 6, 8, 10],    # D, F, H, J (traducciones en E, G, I, K)
-    "Tuesday":   [12, 14, 16, 18], # L, N, P, R (traducciones en M, O, Q, S)
-    "Wednesday": [20, 22, 24, 26], # T, V, X, Z (traducciones en U, W, Y, AA)
-    "Thursday":  [28, 30, 32, 34], # AB, AD, AF, AH (traducciones en AC, AE, AG, AI)
-    "Friday":    [36, 38, 40, 42], # AJ, AL, AN, AP (traducciones en AK, AM, AO, AQ)
-    "Saturday":  [44, 46, 48, 50], # AR, AT, AV, AX (traducciones en AS, AU, AW, AY)
-    "Sunday":    [52, 54, 56, 58], # AZ, BB, BD, BF (traducciones en BA, BC, BE, BG)
+    "Monday":    [4, 6, 8, 10],    # D, F, H, J
+    "Tuesday":   [12, 14, 16, 18], # L, N, P, R
+    "Wednesday": [20, 22, 24, 26], # T, V, X, Z
+    "Thursday":  [28, 30, 32, 34], # AB, AD, AF, AH
+    "Friday":    [36, 38, 40, 42], # AJ, AL, AN, AP
+    "Saturday":  [44, 46, 48, 50], # AR, AT, AV, AX
+    "Sunday":    [52, 54, 56, 58], # AZ, BB, BD, BF
 }
 DC_TRANS_DAY_RANGES = {
     "Monday": (4, 11), "Tuesday": (12, 19), "Wednesday": (20, 27),
@@ -93,13 +91,13 @@ DC_TRANS_DAY_RANGES = {
 }
 
 DJR_TRANS_CONTENT_COLS = {
-    "Monday":    [4, 6, 8, 10],    # D, F, H, J (traducciones en E, G, I)
-    "Tuesday":   [11, 13, 15, 17], # K, M, O, Q (traducciones en L, N, P)
-    "Wednesday": [18, 20, 21, 23], # R, T, U, W (traducciones en S, V)
-    "Thursday":  [24, 26, 27, 29], # X, Z, AA, AC (traducciones en Y, AB)
-    "Friday":    [30, 32, 33, 35], # AD, AF, AG, AI (traducciones en AE, AH)
-    "Saturday":  [36, 38, 39, 41], # AJ, AL, AM, AO (traducciones en AK, AN)
-    "Sunday":    [42, 44, 45, 47], # AP, AR, AS, AU (traducciones en AQ, AT)
+    "Monday":    [4, 6, 8, 10],    # D, F, H, J
+    "Tuesday":   [11, 13, 15, 17], # K, M, O, Q
+    "Wednesday": [18, 20, 21, 23], # R, T, U, W
+    "Thursday":  [24, 26, 27, 29], # X, Z, AA, AC
+    "Friday":    [30, 32, 33, 35], # AD, AF, AG, AI
+    "Saturday":  [36, 38, 39, 41], # AJ, AL, AM, AO
+    "Sunday":    [42, 44, 45, 47], # AP, AR, AS, AU
 }
 DJR_TRANS_DAY_RANGES = {
     "Monday": (4, 10), "Tuesday": (11, 17), "Wednesday": (18, 23),
@@ -143,6 +141,41 @@ def find_translation_template(is_djr: bool) -> Optional[str]:
     return None
 
 
+def _set_cell_keep_merge(
+    ws,
+    row: int,
+    col: int,
+    value,
+    alignment=None,
+    number_format: Optional[str] = None,
+    font=None,
+    fill=None,
+):
+    """Escribe en la celda superior izquierda sin destruir los merged_cells existentes."""
+    cell = ws.cell(row=row, column=col)
+    if isinstance(cell, Cell):
+        cell.value = value
+        if alignment is not None:
+            cell.alignment = alignment
+        if number_format is not None:
+            cell.number_format = number_format
+        if font is not None:
+            cell.font = font
+        if fill is not None:
+            cell.fill = fill
+
+
+def _ensure_merged_range(ws, min_row: int, min_col: int, max_row: int, max_col: int):
+    target_str = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(max_col)}{max_row}"
+    for r in ws.merged_cells.ranges:
+        if str(r) == target_str:
+            return
+    try:
+        ws.merge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
+    except Exception:
+        pass
+
+
 def _get_smart_slots(day_name: str, programming_count: int, mediaplanning_count: int, day_cols_map: Dict[str, List[int]]):
     all_cols = day_cols_map[day_name]
     p_count = min(programming_count, 4)
@@ -172,6 +205,9 @@ def _populate_translation_calendar(
     records: list,
     channel_id_to_name_map: Optional[dict],
     month_str: str,
+    target_year: Optional[int],
+    target_month: Optional[int],
+    first_monday: Optional[date],
 ):
     is_italy = "ital" in country.lower()
     display_country_title = "ITALY" if is_italy else "MENA"
@@ -181,27 +217,20 @@ def _populate_translation_calendar(
         else ("Middle East (Arabic)" if is_djr else "Middle East (Arabic - MSA)")
     )
 
-    try:
-        dt = datetime.strptime(month_str, "%Y-%m")
-        target_year, target_month = dt.year, dt.month
-        month_name_upper = dt.strftime("%B").upper()
-        month_abbr = dt.strftime("%b").capitalize()
-    except Exception:
-        target_year, target_month = resolve_target_month_year(records or [])
+    if target_year and target_month:
+        d_ref = date(target_year, target_month, 1)
+        month_name_upper = d_ref.strftime("%B").upper()
+        month_abbr = d_ref.strftime("%b").capitalize()
+    else:
         month_name_upper = month_name_from_records(records or []).upper() if records else "MONTH"
         month_abbr = month_name_upper.capitalize()[:3]
 
-    first_monday = first_visible_monday_of_target_month(records) if records else None
-    if not first_monday and target_year and target_month:
-        d1 = date(target_year, target_month, 1)
-        first_monday = d1 - timedelta(days=d1.weekday())
-
-    # 1. Actualizar Highlights
+    # 1. Actualizar Highlights sin romper merges
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
             ws_hi = wb[sn]
             if target_year and target_month:
-                safe_set_value(ws_hi, 3, 5, date(target_year, target_month, 1), number_format="mmm-yy")
+                _set_cell_keep_merge(ws_hi, 3, 5, date(target_year, target_month, 1), number_format="mmm-yy")
             for r in range(1, 15):
                 for c in range(1, 10):
                     cell = ws_hi.cell(row=r, column=c)
@@ -214,26 +243,28 @@ def _populate_translation_calendar(
         return
     ws = wb[fc_sheet]
 
-    # Títulos principales B1 y B3
+    # Títulos principales B1 y B3 conservando los merges B1:BB2 / B3:BB4 (o B1:AS2 / B3:AS4 en DJR)
     brand_full = "DISNEY JUNIOR" if is_djr else "DISNEY CHANNEL"
-    safe_set_value(ws, 1, 2, f"{brand_full} YOUTUBE {display_country_title} CALENDAR", alignment=center_wrap())
+    end_header_col = 45 if is_djr else 54  # AS=45, BB=54
+    _ensure_merged_range(ws, 1, 2, 2, end_header_col)
+    _ensure_merged_range(ws, 3, 2, 4, end_header_col)
+
+    _set_cell_keep_merge(ws, 1, 2, f"{brand_full} YOUTUBE {display_country_title} CALENDAR", alignment=center_wrap())
     if is_djr:
         if target_year and target_month:
-            safe_set_value(ws, 3, 2, date(target_year, target_month, 1), alignment=center_wrap(), number_format="mmm-yy")
+            _set_cell_keep_merge(ws, 3, 2, date(target_year, target_month, 1), alignment=center_wrap(), number_format="mmm-yy")
     else:
-        safe_set_value(ws, 3, 2, month_name_upper, alignment=center_wrap())
+        _set_cell_keep_merge(ws, 3, 2, month_name_upper, alignment=center_wrap())
 
-    # Fecha lunes inicial en D6 (DC) o D7 (DJR)
+    # Fecha lunes inicial en D6 (DC) o D7 (DJR) sin descombinar D6:J6 / D7:J7
     start_date_row = 7 if is_djr else 6
     if first_monday:
-        safe_set_value(ws, start_date_row, 4, first_monday, alignment=center_wrap(), number_format="dd-mmm-yy")
+        _set_cell_keep_merge(ws, start_date_row, 4, first_monday, alignment=center_wrap(), number_format="dd-mmm-yy")
 
-    # Configurar parámetros estructurales de las 6 semanas
     step = 62 if is_djr else 54
     day_cols_map = DJR_TRANS_CONTENT_COLS if is_djr else DC_TRANS_CONTENT_COLS
     day_ranges_map = DJR_TRANS_DAY_RANGES if is_djr else DC_TRANS_DAY_RANGES
 
-    # Mapear columnas de traducción (todas las columnas dentro de cada día que NO son de contenido)
     translation_cols: Set[int] = set()
     for d_name in DAY_ORDER:
         c_start, c_end = day_ranges_map[d_name]
@@ -242,7 +273,6 @@ def _populate_translation_calendar(
             if c not in c_list:
                 translation_cols.add(c)
 
-    # Estilos base
     fill_teal_owner = PatternFill(fill_type="solid", fgColor="147D83")
     fill_mint_trans = PatternFill(fill_type="solid", fgColor="EAF6F5")
     fill_djr_owner = PatternFill(fill_type="solid", fgColor="D6DCE4")
@@ -255,7 +285,6 @@ def _populate_translation_calendar(
     font_white_bold = Font(bold=True, color="FFFFFF")
     font_black_bold = Font(bold=True, color="000000")
 
-    # Agregar records por semana y día (tipado estricto separado para DJR y DC)
     djr_buckets: Dict[Tuple[int, str, str], List[dict]] = {}
     dc_buckets: Dict[Tuple[date, str, str], List[dict]] = {}
     if records and first_monday:
@@ -263,6 +292,8 @@ def _populate_translation_calendar(
             djr_buckets = aggregate_by_visual_week_day_role(records, first_monday)
         else:
             dc_buckets = aggregate_by_week_day_and_role(records)
+
+    rows_to_hide_and_clear: Set[int] = set()
 
     for w_idx in range(6):
         offset = w_idx * step
@@ -278,6 +309,7 @@ def _populate_translation_calendar(
             r_country = 18 + offset
             r_used = 19 + offset
             r_link = 20 + offset
+            block_end = r_link + 1
         else:
             r_date = 6 + offset
             r_dl = 7 + offset
@@ -290,11 +322,34 @@ def _populate_translation_calendar(
             r_country = 21 + offset
             r_used = 22 + offset
             r_link = 23 + offset
+            block_end = r_link + 1
 
         week_monday = (first_monday + timedelta(days=w_idx * 7)) if first_monday else None
+        week_sunday = (week_monday + timedelta(days=6)) if week_monday else None
 
-        # Etiqueta de país en B{r_country}
-        safe_set_value(ws, r_country, 2, country_row_label, alignment=center_wrap())
+        # Si toda la semana cae fuera del mes (ej. semana 6 de diciembre = enero), ocultarla por completo
+        if (
+            week_monday is not None
+            and week_sunday is not None
+            and target_month is not None
+            and week_monday.month != target_month
+            and week_sunday.month != target_month
+        ):
+            for r_h in range(r_date, block_end + 1):
+                rows_to_hide_and_clear.add(r_h)
+            continue
+
+        # Reconstruir/asegurar merges de cabecera de esta semana (B:C y bloques diarios de fecha/deadline)
+        if not is_djr:
+            _ensure_merged_range(ws, r_date, 2, r_date, 3)
+        _ensure_merged_range(ws, r_country, 2, r_country, 3)
+        for d_name in DAY_ORDER:
+            c_start, c_end = day_ranges_map[d_name]
+            _ensure_merged_range(ws, r_date, c_start, r_date, c_end)
+            _ensure_merged_range(ws, r_dl, c_start, r_dl, c_end)
+
+        # Etiqueta de país en B{r_country} (combinado B:C)
+        _set_cell_keep_merge(ws, r_country, 2, country_row_label, alignment=center_wrap())
 
         # Recopilar records de esta semana
         per_day_prog: Dict[str, List[dict]] = {}
@@ -314,33 +369,28 @@ def _populate_translation_calendar(
             per_day_media[d_name] = m_recs
             per_day_all[d_name] = p_recs + m_recs
 
-        # Actualizar número de semana (WEEK YYYY-WXX en DC; número ISO en DJR)
-        if week_monday:
+        # Número de semana: "WEEK YYYY-WXX" en DC; "WEEK" en B y número en C para DJR
+        if week_monday is not None:
             if is_djr:
-                safe_set_value(ws, r_date, 2, "WEEK", alignment=center_wrap())
-                safe_set_value(ws, r_date, 3, week_monday.isocalendar()[1], alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_date, 2, "WEEK", alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_date, 3, week_monday.isocalendar()[1], alignment=center_wrap())
             else:
                 wk_label = infer_week_number_for_block(per_day_all, week_monday)
-                safe_set_value(ws, r_date, 2, wk_label, alignment=center_wrap())
+                if not wk_label.upper().startswith("WEEK"):
+                    wk_label = f"WEEK {wk_label}"
+                _set_cell_keep_merge(ws, r_date, 2, wk_label, alignment=center_wrap())
 
-        # Limpiar datos viejos, actualizar deadlines y aplicar estilos in-month / out-of-month
         for d_idx, d_name in enumerate(DAY_ORDER):
             c_start, c_end = day_ranges_map[d_name]
             current_date = (week_monday + timedelta(days=d_idx)) if week_monday else None
-            in_month = (
-                current_date is not None
-                and target_year is not None
-                and target_month is not None
-                and current_date.year == target_year
-                and current_date.month == target_month
-            )
+            in_month = False
+            if current_date is not None and target_year is not None and target_month is not None:
+                in_month = (current_date.year == target_year and current_date.month == target_month)
 
-            # Actualizar fecha DEADLINE del día (evita fechas fijas de noviembre en semanas 2-6)
-            if current_date:
+            if current_date is not None:
                 dl_val = earliest_deadline_for_day(per_day_all[d_name]) or (current_date - timedelta(days=7))
-                safe_set_value(ws, r_dl, c_start, dl_val, alignment=center_wrap(), number_format="dd-mmm-yy")
+                _set_cell_keep_merge(ws, r_dl, c_start, dl_val, alignment=center_wrap(), number_format="dd-mmm-yy")
 
-            # Vaciar valores antiguos y restaurar colores limpios en todo el bloque del día
             for c in range(c_start, c_end + 1):
                 is_trans = c in translation_cols
                 for r_clear in (r_prop, r_ctype, r_title, r_syn, r_strat, r_country, r_used, r_link):
@@ -373,16 +423,15 @@ def _populate_translation_calendar(
                         ws.cell(row=r_used, column=c).fill = fill_grey_used
                         ws.cell(row=r_link, column=c).fill = fill_white_link
 
-            # Asignar slots inteligentes y escribir contenidos aplicables al país
             col_map = _get_smart_slots(d_name, len(per_day_prog[d_name]), len(per_day_media[d_name]), day_cols_map)
             for col in col_map["Programming"]:
-                safe_set_value(ws, r_owner, col, "PROGRAMMING HUB", alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_owner, col, "PROGRAMMING HUB", alignment=center_wrap())
             for col in col_map["Mediaplanning"]:
-                safe_set_value(ws, r_owner, col, "MEDIAPLANNING HUB", alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_owner, col, "MEDIAPLANNING HUB", alignment=center_wrap())
             for col in col_map["UK"]:
-                safe_set_value(ws, r_owner, col, "YT TEAM UK", alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_owner, col, "YT TEAM UK", alignment=center_wrap())
             for col in col_map["Extra"]:
-                safe_set_value(ws, r_owner, col, "", alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_owner, col, "", alignment=center_wrap())
 
             def _write_slot(col: int, rec: dict):
                 f = rec.get("fields", rec)
@@ -419,12 +468,12 @@ def _populate_translation_calendar(
                     else normalize_str(strat_val)
                 )
 
-                safe_set_value(ws, r_prop, col, single.get("property", ""), alignment=center_wrap())
-                safe_set_value(ws, r_ctype, col, ctype, alignment=center_wrap())
-                safe_set_value(ws, r_title, col, single.get("title", ""), alignment=center_wrap())
-                safe_set_value(ws, r_syn, col, single.get("synopsis", ""), alignment=center_wrap())
-                safe_set_value(ws, r_strat, col, strat_str, alignment=center_wrap())
-                safe_set_value(
+                _set_cell_keep_merge(ws, r_prop, col, single.get("property", ""), alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_ctype, col, ctype, alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_title, col, single.get("title", ""), alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_syn, col, single.get("synopsis", ""), alignment=center_wrap())
+                _set_cell_keep_merge(ws, r_strat, col, strat_str, alignment=center_wrap())
+                _set_cell_keep_merge(
                     ws, r_country, col, "YES",
                     alignment=center_wrap(),
                     font=font_white_bold if is_djr else font_black_bold,
@@ -436,7 +485,24 @@ def _populate_translation_calendar(
             for idx, rec in enumerate(per_day_media[d_name][:len(col_map["Mediaplanning"])]):
                 _write_slot(col_map["Mediaplanning"][idx], rec)
 
-    # 3. Actualizar MONTHLY OVERVIEW local y su cabecera
+    # Ocultar semanas fuera de mes y filas sobrantes debajo de la última semana válida
+    for m in list(ws.merged_cells.ranges):
+        if m.min_row in rows_to_hide_and_clear or m.max_row in rows_to_hide_and_clear:
+            try:
+                ws.unmerge_cells(str(m))
+            except Exception:
+                pass
+    for r_hide in sorted(rows_to_hide_and_clear):
+        ws.row_dimensions[r_hide].hidden = True
+        ws.row_dimensions[r_hide].height = 0
+        for c in range(1, end_header_col + 10):
+            cell = ws.cell(row=r_hide, column=c)
+            if isinstance(cell, Cell):
+                cell.value = None
+            cell.fill = PatternFill(fill_type=None)
+            cell.border = Border()
+
+    # 3. Actualizar MONTHLY OVERVIEW local y su cabecera (conservando merge B2:J2 / B5:J5)
     if records:
         if is_djr:
             from exporters.monthly_overview_djr import populate_monthly_overview_djr
@@ -457,7 +523,7 @@ def _populate_translation_calendar(
             title_row = 5 if is_djr else 2
             brand_short = "DJR" if is_djr else "DC"
             yr_str = str(target_year) if target_year else "2026"
-            safe_set_value(
+            _set_cell_keep_merge(
                 ws_ov, title_row, 2,
                 f"{brand_short} {display_country_title} YT {month_name_upper} {yr_str} CALENDAR",
                 alignment=center_wrap(),
@@ -493,13 +559,23 @@ def generate_local_calendars(
     sheet_name = djr_sheet_name if is_djr else dc_sheet_name
     master_countries = djr_master_countries if is_djr else dc_master_countries
 
+    target_year: Optional[int] = None
+    target_month: Optional[int] = None
     try:
         dt = datetime.strptime(month_str, "%Y-%m")
+        target_year = dt.year
+        target_month = dt.month
         month_num = dt.strftime("%m")
         month_name_year = dt.strftime("%B %Y")
     except Exception:
-        month_num = "00"
+        target_year, target_month = resolve_target_month_year(records or [])
+        month_num = f"{target_month:02d}" if target_month else "00"
         month_name_year = month_str
+
+    first_monday: Optional[date] = first_visible_monday_of_target_month(records) if records else None
+    if first_monday is None and target_year is not None and target_month is not None:
+        d1 = date(target_year, target_month, 1)
+        first_monday = d1 - timedelta(days=d1.weekday())
 
     brand_label = "DJR" if is_djr else "DC"
     generated_files = []
@@ -579,6 +655,9 @@ def generate_local_calendars(
                 records=records or [],
                 channel_id_to_name_map=channel_id_to_name_map,
                 month_str=month_str,
+                target_year=target_year,
+                target_month=target_month,
+                first_monday=first_monday,
             )
             filename = f"{month_num}_Social Media Calendar {brand_label} YouTube {clean_country} - {month_name_year}.xlsx"
             output_path = os.path.join(output_dir, filename)
@@ -803,14 +882,44 @@ def generate_local_calendars(
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
 
-        standard_headers = ["deadline", "owner", "property", "content type", "asset", "title", "synopsis", "planning strategy"]
-        junk_keywords = ["watermark", "bug", "copyright", "endcard", "branding", "status conforming", "comments", "total vod", "burned", "tx id", "tc in", "tz id", "tc im"]
+        standard_headers = [
+            "deadline", "owner", "property", "content type", "asset",
+            "title", "synopsis", "planning strategy", "used or not", "link youtube",
+        ]
+        junk_keywords = [
+            "watermark", "bug", "copyright", "endcard", "branding",
+            "status conforming", "comments", "total vod", "burned",
+            "tx id", "tc in", "tz id", "tc im",
+        ]
 
-        for r in range(1, 500):
+        weeks_out_of_month: Set[int] = set()
+        if target_year is not None and target_month is not None and first_monday is not None:
+            for w in range(6):
+                w_monday = first_monday + timedelta(days=w * 7)
+                w_sunday = w_monday + timedelta(days=6)
+                if w_monday.month != target_month and w_sunday.month != target_month:
+                    weeks_out_of_month.add(w)
+
+        current_week_idx = -1
+        sheet_max_row = ws.max_row if isinstance(ws.max_row, int) else 500
+
+        for r in range(1, sheet_max_row + 1):
             val_a = get_val(ws, r, 1)
             val_b = get_val(ws, r, 2)
             val_c = get_val(ws, r, 3)
             header_col_text = f"{val_a} {val_b} {val_c}".lower()
+
+            if val_b.startswith("week"):
+                current_week_idx += 1
+
+            if current_week_idx in weeks_out_of_month:
+                rows_to_hide_and_clear.add(r)
+                continue
+
+            if "disney" in header_col_text and "channel" in header_col_text and "country" in header_col_text and r > 200:
+                for row_to_end in range(r - 2, sheet_max_row + 1):
+                    rows_to_hide_and_clear.add(row_to_end)
+                break
 
             if any(h in header_col_text for h in standard_headers) or "week" in header_col_text:
                 safe_rows.add(r)
@@ -857,7 +966,7 @@ def generate_local_calendars(
         for r in sorted(list(rows_to_hide_and_clear)):
             ws.row_dimensions[r].hidden = True
             ws.row_dimensions[r].height = 0
-            for c in range(1, 35):
+            for c in range(1, 40):
                 try:
                     cell = ws.cell(row=r, column=c)
                     if isinstance(cell, Cell):
@@ -866,6 +975,12 @@ def generate_local_calendars(
                     cell.border = Border()
                 except Exception:
                     pass
+
+        sheet_max_col = ws.max_column if isinstance(ws.max_column, int) else 40
+        for c in range(1, sheet_max_col + 1):
+            c_val = str(ws.cell(row=1, column=c).value).lower()
+            if "total vod" in c_val:
+                ws.column_dimensions[get_column_letter(c)].hidden = True
 
         # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY CODE (<= 31 CHARS) ---
         for sn in country_wb.sheetnames:

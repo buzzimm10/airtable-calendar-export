@@ -225,15 +225,19 @@ def write_vertical_short_cell(ws, top_row: int, col: int, record: Dict, target_c
 
     # MAGIA: Merge vertical si es calendario local
     if target_country:
-        bottom_cell.value = None
+        if bottom_cell is not top_cell:
+            bottom_cell.value = None
         try:
             ws.merge_cells(start_row=top_row, start_column=col, end_row=top_row + 1, end_column=col)
-        except Exception: pass
+        except Exception:
+            pass
     else:
         bottom_cell.value = tier_text
         bottom_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        if tier_text == "SPAIN ONLY": bottom_cell.font = Font(bold=True, color="FFFFFF00")
-        else: bottom_cell.font = Font(bold=True, color="FFFF0000")
+        if tier_text == "SPAIN ONLY":
+            bottom_cell.font = Font(bold=True, color="FFFFFF00")
+        else:
+            bottom_cell.font = Font(bold=True, color="FFFF0000")
 
 def auto_adjust_overview_row_height(ws, row: int, min_height: float = 24, per_line: float = 16, chars_per_line: int = 22):
     """
@@ -530,5 +534,30 @@ def populate_monthly_overview(
     for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
         for event_row in layout["event_rows"]:
             auto_adjust_overview_row_height(ws, event_row, min_height=24, per_line=14)
+
+    if target_country and valid_dates and first_monday:
+        t_month = Counter(d.month for d in valid_dates).most_common(1)[0][0]
+        for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
+            w_mon = first_monday + timedelta(days=(week_num - 1) * 7)
+            w_sun = w_mon + timedelta(days=6)
+            if w_mon.month != t_month and w_sun.month != t_month:
+                start_hide = max(1, layout["header_row"] - 1)
+                end_hide = layout["end_row"]
+                for m in list(ws.merged_cells.ranges):
+                    if start_hide <= m.min_row <= end_hide or start_hide <= m.max_row <= end_hide:
+                        try:
+                            ws.unmerge_cells(str(m))
+                        except Exception:
+                            pass
+                for r_hide in range(start_hide, end_hide + 1):
+                    ws.row_dimensions[r_hide].hidden = True
+                    ws.row_dimensions[r_hide].height = 0
+                    for c_hide in range(1, 12):
+                        c_obj = ws.cell(row=r_hide, column=c_hide)
+                        if hasattr(c_obj, "value") and not isinstance(c_obj, type(None)):
+                            try:
+                                c_obj.value = None
+                            except Exception:
+                                pass
 
     logging.info(f"Finished populating '{MONTHLY_OVERVIEW_SHEET}'.")

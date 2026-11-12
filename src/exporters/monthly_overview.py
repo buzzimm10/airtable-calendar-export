@@ -26,13 +26,15 @@ from core.countries import (
     normalize_str,
     lower_clean,
     normalize_overview_region,
-    format_except_suffix
+    format_except_suffix,
 )
 
 from core.dates import (
     parse_date, 
     first_visible_monday,
     month_name_from_records,
+    resolve_target_month_year,
+    first_visible_monday_of_target_month,
 )
 
 from core.text_formatting import replace_month_in_title
@@ -559,5 +561,24 @@ def populate_monthly_overview(
                                 c_obj.value = None
                             except Exception:
                                 pass
+
+    _, t_month = resolve_target_month_year(records)
+    ref_monday = first_visible_monday_of_target_month(records) or first_monday
+    if t_month and ref_monday:
+        for week_num, layout in OVERVIEW_WEEK_LAYOUT.items():
+            w_mon = ref_monday + timedelta(days=(week_num - 1) * 7)
+            w_sun = w_mon + timedelta(days=6)
+            if w_mon.month != t_month and w_sun.month != t_month:
+                start_hide = max(1, layout["header_row"] - 1)
+                end_hide = layout["end_row"]
+                for m in list(ws.merged_cells.ranges):
+                    if start_hide <= m.min_row <= end_hide or start_hide <= m.max_row <= end_hide:
+                        try:
+                            ws.unmerge_cells(str(m))
+                        except Exception:
+                            pass
+                for r_hide in range(start_hide, end_hide + 1):
+                    ws.row_dimensions[r_hide].hidden = True
+                    ws.row_dimensions[r_hide].height = 0
 
     logging.info(f"Finished populating '{MONTHLY_OVERVIEW_SHEET}'.")

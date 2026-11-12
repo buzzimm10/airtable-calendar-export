@@ -94,7 +94,7 @@ def write_djr_start_date(ws, first_monday):
     cell = get_writable_cell(ws, 7, 4)
     cell.value = first_monday
     cell.alignment = center_wrap()
-    cell.number_format = "dd-mmm-yy"
+    cell.number_format = "dddd, dd mmmm yyyy"
 
 def write_djr_month_title(ws, records):
     cell_b1 = get_writable_cell(ws, 1, 2)
@@ -550,6 +550,11 @@ def populate_calendar_djr(
     for week_index, layout in DJR_WEEK_LAYOUT.items():
         week_monday = first_monday + timedelta(days=(week_index - 1) * 7)
         write_djr_week_number(ws, layout, week_monday)
+
+        for day_name in DAY_ORDER:
+            first_col = min(col for _, col in DJR_DAY_LAYOUT[day_name])
+            get_writable_cell(ws, layout["date_row"], first_col).number_format = "dddd, dd mmmm yyyy"
+            get_writable_cell(ws, layout["deadline_row"], first_col).number_format = "dddd, dd mmmm yyyy"
 
         for day_name in DAY_ORDER:
             prog_records = buckets.get((week_index, day_name, "Programming"), [])

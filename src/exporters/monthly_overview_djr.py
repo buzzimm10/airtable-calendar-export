@@ -15,6 +15,7 @@ from core.dates import (
     parse_date,
     first_visible_monday_of_target_month,
     month_name_from_records,
+    resolve_target_month_year,
 )
 from core.text_formatting import normalize_str, lower_clean
 from core.excel_utils import get_writable_cell, center_wrap
@@ -311,4 +312,23 @@ def populate_monthly_overview_djr(
         write_djr_overview_regular_cell(ws, row, col, text, bucket)
 
     auto_adjust_djr_overview_heights(ws)
+
+    _, t_month = resolve_target_month_year(records)
+    if t_month:
+        for week_num, layout in DJR_OVERVIEW_WEEK_LAYOUT.items():
+            w_mon = first_monday + timedelta(days=(week_num - 1) * 7)
+            w_sun = w_mon + timedelta(days=6)
+            if w_mon.month != t_month and w_sun.month != t_month:
+                start_hide = max(1, layout["date_row"] - 2)
+                end_hide = layout["vertical_rows"][1]
+                for m in list(ws.merged_cells.ranges):
+                    if start_hide <= m.min_row <= end_hide or start_hide <= m.max_row <= end_hide:
+                        try:
+                            ws.unmerge_cells(str(m))
+                        except Exception:
+                            pass
+                for r_hide in range(start_hide, end_hide + 1):
+                    ws.row_dimensions[r_hide].hidden = True
+                    ws.row_dimensions[r_hide].height = 0
+
     logging.info(f"Finished populating '{overview_sheet_name}'.")

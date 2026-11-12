@@ -35,6 +35,8 @@ from services.planner_service import (
 from exporters.shared.records import aggregate_by_visual_week_day_role
 from exporters.full_calendar import infer_week_number_for_block
 
+LONG_DATE_FMT = "dddd, dd mmmm yyyy"
+
 COUNTRY_SHEET_CODES = {
     "middle east": "MENA",
     "middle east (arabic - msa)": "MENA",
@@ -166,10 +168,16 @@ def _set_cell_keep_merge(
 
 
 def _ensure_merged_range(ws, min_row: int, min_col: int, max_row: int, max_col: int):
+    """Descombina cualquier rango solapado antes de combinar, evitando XML corrupto en Excel."""
     target_str = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(max_col)}{max_row}"
-    for r in ws.merged_cells.ranges:
+    for r in list(ws.merged_cells.ranges):
         if str(r) == target_str:
             return
+        if not (r.max_col < min_col or r.min_col > max_col or r.max_row < min_row or r.min_row > max_row):
+            try:
+                ws.unmerge_cells(str(r))
+            except Exception:
+                pass
     try:
         ws.merge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
     except Exception:
@@ -243,9 +251,8 @@ def _populate_translation_calendar(
         return
     ws = wb[fc_sheet]
 
-    # Títulos principales B1 y B3 conservando los merges B1:BB2 / B3:BB4 (o B1:AS2 / B3:AS4 en DJR)
     brand_full = "DISNEY JUNIOR" if is_djr else "DISNEY CHANNEL"
-    end_header_col = 45 if is_djr else 54  # AS=45, BB=54
+    end_header_col = 47 if is_djr else 54  # AU=47 en DJR, BB=54 en DC
     _ensure_merged_range(ws, 1, 2, 2, end_header_col)
     _ensure_merged_range(ws, 3, 2, 4, end_header_col)
 
@@ -256,10 +263,10 @@ def _populate_translation_calendar(
     else:
         _set_cell_keep_merge(ws, 3, 2, month_name_upper, alignment=center_wrap())
 
-    # Fecha lunes inicial en D6 (DC) o D7 (DJR) sin descombinar D6:J6 / D7:J7
+    # Fecha lunes inicial en D6 (DC) o D7 (DJR) con formato largo ("lunes, 30 de noviembre de 2026")
     start_date_row = 7 if is_djr else 6
     if first_monday:
-        _set_cell_keep_merge(ws, start_date_row, 4, first_monday, alignment=center_wrap(), number_format="dd-mmm-yy")
+        _set_cell_keep_merge(ws, start_date_row, 4, first_monday, alignment=center_wrap(), number_format=LONG_DATE_FMT)
 
     step = 62 if is_djr else 54
     day_cols_map = DJR_TRANS_CONTENT_COLS if is_djr else DC_TRANS_CONTENT_COLS
@@ -339,7 +346,7 @@ def _populate_translation_calendar(
                 rows_to_hide_and_clear.add(r_h)
             continue
 
-        # Reconstruir/asegurar merges de cabecera de esta semana (B:C y bloques diarios de fecha/deadline)
+        # Asegurar merges de cabecera de esta semana sin solapamientos
         if not is_djr:
             _ensure_merged_range(ws, r_date, 2, r_date, 3)
         _ensure_merged_range(ws, r_country, 2, r_country, 3)
@@ -348,10 +355,8 @@ def _populate_translation_calendar(
             _ensure_merged_range(ws, r_date, c_start, r_date, c_end)
             _ensure_merged_range(ws, r_dl, c_start, r_dl, c_end)
 
-        # Etiqueta de país en B{r_country} (combinado B:C)
         _set_cell_keep_merge(ws, r_country, 2, country_row_label, alignment=center_wrap())
 
-        # Recopilar records de esta semana
         per_day_prog: Dict[str, List[dict]] = {}
         per_day_media: Dict[str, List[dict]] = {}
         per_day_all: Dict[str, List[dict]] = {}
@@ -387,9 +392,16 @@ def _populate_translation_calendar(
             if current_date is not None and target_year is not None and target_month is not None:
                 in_month = (current_date.year == target_year and current_date.month == target_month)
 
+            # Aplicar formato largo de fecha ("dddd, dd mmmm yyyy") en la celda de fecha del día (conserva fórmula =D6+1)
+            date_cell = ws.cell(row=r_date, column=c_start)
+            if isinstance(date_cell, Cell):
+                date_cell.number_format = LONG_DATE_FMT
+                date_cell.alignment = center_wrap()
+
+            # Actualizar fecha DEADLINE del día con el mismo formato largo ("dddd, dd mmmm yyyy")
             if current_date is not None:
                 dl_val = earliest_deadline_for_day(per_day_all[d_name]) or (current_date - timedelta(days=7))
-                _set_cell_keep_merge(ws, r_dl, c_start, dl_val, alignment=center_wrap(), number_format="dd-mmm-yy")
+                _set_cell_keep_merge(ws, r_dl, c_start, dl_val, alignment=center_wrap(), number_format=LONG_DATE_FMT)
 
             for c in range(c_start, c_end + 1):
                 is_trans = c in translation_cols
@@ -485,7 +497,7 @@ def _populate_translation_calendar(
             for idx, rec in enumerate(per_day_media[d_name][:len(col_map["Mediaplanning"])]):
                 _write_slot(col_map["Mediaplanning"][idx], rec)
 
-    # Ocultar semanas fuera de mes y filas sobrantes debajo de la última semana válida
+    # Ocultar semanas fuera de mes
     for m in list(ws.merged_cells.ranges):
         if m.min_row in rows_to_hide_and_clear or m.max_row in rows_to_hide_and_clear:
             try:
@@ -495,7 +507,7 @@ def _populate_translation_calendar(
     for r_hide in sorted(rows_to_hide_and_clear):
         ws.row_dimensions[r_hide].hidden = True
         ws.row_dimensions[r_hide].height = 0
-        for c in range(1, end_header_col + 10):
+        for c in range(1, end_header_col + 15):
             cell = ws.cell(row=r_hide, column=c)
             if isinstance(cell, Cell):
                 cell.value = None
@@ -693,6 +705,15 @@ def generate_local_calendars(
                 if len(day_cols) >= 4:
                     uk_col_letter = get_column_letter(day_cols[3])
                     ws.column_dimensions[uk_col_letter].width = 22
+            # Aplicar formato largo de fecha ("dddd, dd mmmm yyyy") en DJR Full Calendar
+            for layout in djr_layout.values():
+                for r_fmt in (layout.get("date_row"), layout.get("deadline_row")):
+                    if isinstance(r_fmt, int):
+                        for day in DAY_ORDER:
+                            first_c = min(col for _, col in djr_day[day])
+                            c_obj = ws.cell(row=r_fmt, column=first_c)
+                            if isinstance(c_obj, Cell):
+                                c_obj.number_format = LONG_DATE_FMT
 
         if records:
             if is_djr:

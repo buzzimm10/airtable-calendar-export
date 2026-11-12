@@ -293,12 +293,8 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             new_title = f"YT DC EMEA {month_abbr} Highlights"
             wb[sn].title = new_title
             if target_year and target_month:
-                ws_hi = wb[new_title]
-                # Escribir en E3 (Disney Channel y Junior)
-                safe_set_value(ws_hi, 3, 5, date(target_year, target_month, 1), number_format="mmm-yy")
-                # Escribir en E4 el formato mes-año como texto si es necesario
-                d_str = date(target_year, target_month, 1).strftime("%b-%y").lower()
-                safe_set_value(ws_hi, 4, 5, d_str)
+                ws_high = wb[new_title]
+                safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="[$-409]mmm-yy")
 
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)

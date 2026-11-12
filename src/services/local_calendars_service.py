@@ -239,7 +239,7 @@ def _populate_translation_calendar(
         if "highlights" in sn.lower():
             ws_hi = wb[sn]
             if target_year and target_month:
-                _set_cell_keep_merge(ws_hi, 3, 5, date(target_year, target_month, 1), number_format="mmm-yy")
+                _set_cell_keep_merge(ws_hi, 3, 5, date(target_year, target_month, 1), number_format="[$-409]mmm-yy")
             for r in range(1, 15):
                 for c in range(1, 10):
                     cell = ws_hi.cell(row=r, column=c)

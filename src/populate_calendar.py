@@ -294,7 +294,7 @@ def populate_calendar(template_path: str, output_path: str, records: List[Dict],
             wb[sn].title = new_title
             if target_year and target_month:
                 ws_high = wb[new_title]
-                safe_set_value(ws_high, 4, 5, date(target_year, target_month, 1), number_format="[$-409]mmm-yy")
+                safe_set_value(ws_high, 3, 5, date(target_year, target_month, 1), number_format="[$-409]mmm-yy")
 
     cleanup_stale_merged_cells(ws) 
     wb.save(output_path)

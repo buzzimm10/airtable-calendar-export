@@ -147,6 +147,7 @@ def write_country_rollout_dc(ws, block, record, col, channel_id_to_name_map):
         notes=f.get(AT_FIELDS["notes"]),
         excluded_markets=f.get(AT_FIELDS["excluded_markets"]),
         channel_id_to_name_map=channel_id_to_name_map,
+        owner_hub=f.get(AT_FIELDS["owner_hub"]),
     )
     FILL_GREEN = PatternFill(fill_type="solid", fgColor="00B050")
     for country, row_idx in getattr(block, 'rollout_country_rows', {}).items():

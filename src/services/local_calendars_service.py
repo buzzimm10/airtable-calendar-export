@@ -439,6 +439,7 @@ def _populate_translation_calendar(
                         notes=f.get(AT_FIELDS["notes"]),
                         excluded_markets=f.get(AT_FIELDS["excluded_markets"]),
                         channel_id_to_name_map=channel_id_to_name_map,
+                        owner_hub=f.get(AT_FIELDS["owner_hub"]),
                     )
                 target_norm = clean_country.lower()
                 is_included = any(

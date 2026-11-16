@@ -95,96 +95,17 @@ def format_excluded_markets_comment(excluded_markets) -> str:
 
     return "Except " + ", ".join(cleaned)
 
-def collect_included_countries(youtube_channel, region, notes, excluded_markets=None, channel_id_to_name_map=None):
+def _is_mediaplanning_hub(owner_hub: Optional[str]) -> bool:
+    if not owner_hub:
+        return False
+    h = lower_clean(owner_hub)
+    return ("media" in h or "creative" in h) and "uk" not in h and "studios" not in h
+
+
+def resolve_region_countries(region_val, owner_hub: Optional[str] = None) -> set:
     """
-    Determine included countries using:
-    1) YouTube Channel (primary)
-    2) Region / Tier (secondary)
-    3) Notes exclusions (final override)
-
-    If both channel and region exist, use intersection.
-    """
-    if channel_id_to_name_map is None:
-        channel_id_to_name_map = {}
-
-    included = set()
-
-    # --------
-    # Channel
-    # --------
-    channel_countries = set()
-
-    if youtube_channel:
-        if isinstance(youtube_channel, list):
-            raw_channels = youtube_channel
-        else:
-            raw_channels = [youtube_channel]
-
-        resolved_channels = []
-        for item in raw_channels:
-            item_norm = normalize_str(item)
-            if item_norm in channel_id_to_name_map:
-                resolved_channels.append(lower_clean(channel_id_to_name_map[item_norm]))
-            else:
-                resolved_channels.append(lower_clean(item_norm))
-
-        channel_blob = " | ".join(resolved_channels)
-
-        for key, countries in CHANNEL_COUNTRY_MAP.items():
-            if key in channel_blob:
-                channel_countries |= set(countries)
-
-    # -------
-    # Region
-    # -------
-    region_countries = set()
-
-    if region:
-        if isinstance(region, list):
-            reg_text = " | ".join(lower_clean(x) for x in region)
-        else:
-            reg_text = lower_clean(region)
-
-        parts = re.split(r"[,&+/|]+", reg_text)
-        for part in parts:
-            part = part.strip()
-            if part in REGION_PRESETS:
-                region_countries |= set(REGION_PRESETS[part])
-
-    # Combine channel + region
-    if channel_countries and region_countries:
-        included = channel_countries & region_countries
-    elif channel_countries:
-        included = channel_countries
-    elif region_countries:
-        included = region_countries
-    else:
-        included = set()
-
-    # Notes exclusions
-    excluded = set()
-
-    # New structured field
-    if excluded_markets:
-        raw_items = excluded_markets if isinstance(excluded_markets, list) else [excluded_markets]
-        for item in raw_items:
-            item_clean = lower_clean(item)
-            if item_clean in COUNTRY_ALIASES:
-                excluded.add(COUNTRY_ALIASES[item_clean])
-            else:
-                for alias, canonical in COUNTRY_ALIASES.items():
-                    if alias in item_clean:
-                        excluded.add(canonical)
-
-    # Optional legacy fallback
-    excluded |= extract_excluded_countries_from_notes(notes)
-
-    included -= excluded
-    return included, excluded
-
-def resolve_region_countries(region_val) -> set:
-    """
-    Resolve Region/Tier field into canonical country set using REGION_PRESETS.
+    Resolve Region/Tier field into canonical country set using REGION_PRESETS + COUNTRY_ALIASES.
+    In Disney Channel, Tier A includes Portugal ONLY when owner_hub is Mediaplanning Hub.
     """
     region_countries = set()
 
@@ -196,16 +117,87 @@ def resolve_region_countries(region_val) -> set:
     else:
         reg_text = lower_clean(region_val)
 
-    # Clean list-like strings
     reg_text = reg_text.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+    parts = [p.strip() for p in re.split(r"[,&+/|]+", reg_text) if p.strip()]
 
-    parts = re.split(r"[,&+/|]+", reg_text)
+    has_tier_a = False
     for part in parts:
-        part = part.strip()
+        if part in {"tier a", "a", "group a"}:
+            has_tier_a = True
         if part in REGION_PRESETS:
             region_countries |= set(REGION_PRESETS[part])
+        elif part in COUNTRY_ALIASES:
+            region_countries.add(COUNTRY_ALIASES[part])
+        else:
+            part_base = re.sub(r"\s*\(.*?\)", "", part).strip()
+            if part_base in COUNTRY_ALIASES:
+                region_countries.add(COUNTRY_ALIASES[part_base])
+
+    if has_tier_a and _is_mediaplanning_hub(owner_hub):
+        region_countries.add("Portugal")
 
     return region_countries
+
+
+def collect_included_countries(
+    youtube_channel,
+    region,
+    notes,
+    excluded_markets=None,
+    channel_id_to_name_map=None,
+    owner_hub: Optional[str] = None,
+):
+    """
+    Determine included countries using:
+    1) YouTube Channel (primary)
+    2) Region / Tier + explicit countries (secondary; Tier A adds Portugal if Mediaplanning Hub)
+    3) Notes / Excluded Markets (final override)
+    """
+    if channel_id_to_name_map is None:
+        channel_id_to_name_map = {}
+
+    channel_countries = set()
+    if youtube_channel:
+        raw_channels = youtube_channel if isinstance(youtube_channel, list) else [youtube_channel]
+        resolved_channels = []
+        for item in raw_channels:
+            item_norm = normalize_str(item)
+            if item_norm in channel_id_to_name_map:
+                resolved_channels.append(lower_clean(channel_id_to_name_map[item_norm]))
+            else:
+                resolved_channels.append(lower_clean(item_norm))
+
+        channel_blob = " | ".join(resolved_channels)
+        for key, countries in CHANNEL_COUNTRY_MAP.items():
+            if key in channel_blob:
+                channel_countries |= set(countries)
+
+    region_countries = resolve_region_countries(region, owner_hub=owner_hub)
+
+    if channel_countries and region_countries:
+        included = channel_countries & region_countries
+    elif channel_countries:
+        included = channel_countries
+    elif region_countries:
+        included = region_countries
+    else:
+        included = set()
+
+    excluded = set()
+    if excluded_markets:
+        raw_items = excluded_markets if isinstance(excluded_markets, list) else [excluded_markets]
+        for item in raw_items:
+            item_clean = lower_clean(item)
+            if item_clean in COUNTRY_ALIASES:
+                excluded.add(COUNTRY_ALIASES[item_clean])
+            else:
+                for alias, canonical in COUNTRY_ALIASES.items():
+                    if alias in item_clean:
+                        excluded.add(canonical)
+
+    excluded |= extract_excluded_countries_from_notes(notes)
+    included -= excluded
+    return included, excluded
 
 def ordered_country_list(countries: set) -> List[str]:
     """

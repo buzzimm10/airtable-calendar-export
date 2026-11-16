@@ -165,21 +165,21 @@ REGION_PRESETS = {
     "tier s": {"Spain"},
     "s": {"Spain"},
     "group s": {"Spain"},
-    "a": {"Spain", "France (French)", "Poland (Polish)", "Portugal"},
-    "tier a": {"Spain", "France (French)", "Poland (Polish)", "Portugal"},
-    "group a": {"Spain", "France (French)", "Poland (Polish)", "Portugal"},
+    "a": {"Spain", "France (French)", "Poland (Polish)"},
+    "tier a": {"Spain", "France (French)", "Poland (Polish)"},
+    "group a": {"Spain", "France (French)", "Poland (Polish)"},
     "tier b": {
-        "Romania (Romanian)", "Greece (Greek)",
+        "Portugal", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },
     "b": {
-        "Romania (Romanian)", "Greece (Greek)",
+        "Portugal", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },
     "group b": {
-        "Romania (Romanian)", "Greece (Greek)",
+        "Portugal", "Romania (Romanian)", "Greece (Greek)",
         "Middle East (Arabic - MSA)", "Netherlands (Dutch)", "Belgium (French)",
         "Israel (Hebrew)", "Bulgaria (Bulgarian)"
     },

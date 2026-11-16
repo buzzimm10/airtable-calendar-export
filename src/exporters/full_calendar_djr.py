@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from collections import defaultdict, Counter
 from datetime import timedelta, date
@@ -16,7 +17,12 @@ from config.layouts_djr import (
     DJR_DAY_LAYOUT,
     DJR_WEEK_LAYOUT,
 )
-from config.countries_djr import DJR_SHEET_COUNTRIES, DJR_REGION_PRESETS
+from config.countries_djr import (
+    DJR_SHEET_COUNTRIES,
+    DJR_REGION_PRESETS,
+    DJR_COUNTRY_ALIASES,
+    DJR_CHANNEL_COUNTRY_MAP,
+)
 from core.dates import (
     parse_date,
     month_name_from_records, 
@@ -178,40 +184,99 @@ def write_djr_deadline(ws, layout, day_name, records):
 
 # --- 🚀 FIX CRÍTICO: Ahora extrae correctamente los fields ---
 def collect_included_countries_djr(record, channel_id_to_name_map=None):
+    if channel_id_to_name_map is None:
+        channel_id_to_name_map = {}
+
     f = record.get("fields", record)
     region_raw = f.get(AT_FIELDS["region"])
     region_str = str(region_raw).lower()
-    
-    if "spain only" in region_str: return {"Spain"}
-        
-    included = set()
+
+    if "spain only" in region_str:
+        return {"Spain"}
+
+    # 1. Resolver países desde Region (Tiers + países explícitos como "Portugal")
+    region_countries = set()
     if region_raw:
-        r_items = [lower_clean(x) for x in region_raw] if isinstance(region_raw, list) else [x.strip().lower() for x in str(region_raw).replace("[", "").replace("]", "").replace("'", "").replace('"', "").split(",") if x.strip()]
+        if isinstance(region_raw, list):
+            reg_text = " | ".join(lower_clean(x) for x in region_raw)
+        else:
+            reg_text = lower_clean(region_raw)
+        reg_text = reg_text.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+        r_items = [x.strip() for x in re.split(r"[,&+/|]+", reg_text) if x.strip()]
+
         for item in r_items:
-            if item in DJR_REGION_PRESETS: included |= set(DJR_REGION_PRESETS[item])
-                
-    if not included:
-        dc_included, _ = collect_included_countries(
-            youtube_channel=f.get(AT_FIELDS["youtube_channel"]),
-            region=region_raw,
-            notes=f.get(AT_FIELDS["notes"]),
-            excluded_markets=None,
-            channel_id_to_name_map=channel_id_to_name_map,
-        )
-        included = {DC_TO_DJR_COUNTRY.get(c, c) for c in dc_included}
-        
+            if item in DJR_REGION_PRESETS:
+                region_countries |= set(DJR_REGION_PRESETS[item])
+            elif item in DJR_COUNTRY_ALIASES:
+                region_countries.add(DJR_COUNTRY_ALIASES[item])
+            else:
+                item_base = re.sub(r"\s*\(.*?\)", "", item).strip()
+                if item_base in DJR_COUNTRY_ALIASES:
+                    region_countries.add(DJR_COUNTRY_ALIASES[item_base])
+
+    # 2. Resolver países desde YouTube Channel (doble chequeo)
+    channel_countries = set()
+    yt_raw = f.get(AT_FIELDS["youtube_channel"])
+    if yt_raw:
+        raw_channels = yt_raw if isinstance(yt_raw, list) else [yt_raw]
+        resolved_channels = []
+        for ch in raw_channels:
+            ch_norm = normalize_str(ch)
+            if ch_norm in channel_id_to_name_map:
+                resolved_channels.append(lower_clean(channel_id_to_name_map[ch_norm]))
+            else:
+                resolved_channels.append(lower_clean(ch_norm))
+
+        channel_blob = " | ".join(resolved_channels)
+        for key, countries in DJR_CHANNEL_COUNTRY_MAP.items():
+            if key in channel_blob:
+                channel_countries |= set(countries)
+
+        # Fallback por si el canal en Airtable usa nomenclatura DC/Kids
+        if not channel_countries:
+            dc_ch_included, _ = collect_included_countries(
+                youtube_channel=yt_raw,
+                region=None,
+                notes=None,
+                excluded_markets=None,
+                channel_id_to_name_map=channel_id_to_name_map,
+            )
+            channel_countries = {DC_TO_DJR_COUNTRY.get(c, c) for c in dc_ch_included}
+
+    # 3. Combinar con intersección (doble chequeo) si ambos campos existen
+    if channel_countries and region_countries:
+        included = channel_countries & region_countries
+    elif region_countries:
+        included = region_countries
+    elif channel_countries:
+        included = channel_countries
+    else:
+        included = set()
+
+    # 4. Aplicar exclusiones (Excluded Markets y Notes "Except ...")
     ex_raw = f.get(AT_FIELDS["excluded_markets"])
     if ex_raw:
-        ex_items = [lower_clean(x) for x in ex_raw] if isinstance(ex_raw, list) else [x.strip().lower() for x in str(ex_raw).split(",") if x.strip()]
+        ex_items = (
+            [lower_clean(x) for x in ex_raw]
+            if isinstance(ex_raw, list)
+            else [x.strip().lower() for x in str(ex_raw).split(",") if x.strip()]
+        )
         to_remove = set()
         for c in included:
             c_lower = c.lower() if isinstance(c, str) else ""
             for ex in ex_items:
-                if ex in c_lower: to_remove.add(c)
+                if ex in c_lower or DJR_COUNTRY_ALIASES.get(ex) == c:
+                    to_remove.add(c)
                 for dc_k, dc_v in DC_TO_DJR_COUNTRY.items():
-                    if dc_v == c and ex in dc_k.lower(): to_remove.add(c)
+                    if dc_v == c and ex in dc_k.lower():
+                        to_remove.add(c)
         included -= to_remove
-        
+
+    from core.countries import extract_excluded_countries_from_notes
+    note_excluded_dc = extract_excluded_countries_from_notes(f.get(AT_FIELDS["notes"]))
+    if note_excluded_dc:
+        included -= {DC_TO_DJR_COUNTRY.get(c, c) for c in note_excluded_dc}
+
     return included
 
 def write_djr_country_rollout(ws, layout, column_map, record, col, channel_id_to_name_map):

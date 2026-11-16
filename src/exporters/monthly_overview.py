@@ -475,6 +475,7 @@ def populate_monthly_overview(
                 notes=fields.get(AT_FIELDS["notes"]),
                 excluded_markets=fields.get(AT_FIELDS["excluded_markets"]),
                 channel_id_to_name_map=channel_id_to_name_map,
+                owner_hub=fields.get(AT_FIELDS["owner_hub"]),
             )
             if not is_country_match(target_country, included):
                 continue

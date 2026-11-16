@@ -214,7 +214,7 @@ def collect_included_countries_djr(record, channel_id_to_name_map=None):
                 if item_base in DJR_COUNTRY_ALIASES:
                     region_countries.add(DJR_COUNTRY_ALIASES[item_base])
 
-    # 2. Resolver países desde YouTube Channel (doble chequeo)
+    # 2. Resolver países desde YouTube Channel (doble chequeo completo)
     channel_countries = set()
     yt_raw = f.get(AT_FIELDS["youtube_channel"])
     if yt_raw:
@@ -232,16 +232,15 @@ def collect_included_countries_djr(record, channel_id_to_name_map=None):
             if key in channel_blob:
                 channel_countries |= set(countries)
 
-        # Fallback por si el canal en Airtable usa nomenclatura DC/Kids
-        if not channel_countries:
-            dc_ch_included, _ = collect_included_countries(
-                youtube_channel=yt_raw,
-                region=None,
-                notes=None,
-                excluded_markets=None,
-                channel_id_to_name_map=channel_id_to_name_map,
-            )
-            channel_countries = {DC_TO_DJR_COUNTRY.get(c, c) for c in dc_ch_included}
+        # Sumar también variantes compartidas (Disney Kids / Disney Romania / etc.)
+        dc_ch_included, _ = collect_included_countries(
+            youtube_channel=yt_raw,
+            region=None,
+            notes=None,
+            excluded_markets=None,
+            channel_id_to_name_map=channel_id_to_name_map,
+        )
+        channel_countries |= {DC_TO_DJR_COUNTRY.get(c, c) for c in dc_ch_included}
 
     # 3. Combinar con intersección (doble chequeo) si ambos campos existen
     if channel_countries and region_countries:

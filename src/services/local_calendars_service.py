@@ -80,13 +80,13 @@ COUNTRY_SHEET_CODES = {
 }
 
 DC_TRANS_CONTENT_COLS = {
-    "Monday":    [4, 6, 8, 10],    # D, F, H, J
-    "Tuesday":   [12, 14, 16, 18], # L, N, P, R
-    "Wednesday": [20, 22, 24, 26], # T, V, X, Z
-    "Thursday":  [28, 30, 32, 34], # AB, AD, AF, AH
-    "Friday":    [36, 38, 40, 42], # AJ, AL, AN, AP
-    "Saturday":  [44, 46, 48, 50], # AR, AT, AV, AX
-    "Sunday":    [52, 54, 56, 58], # AZ, BB, BD, BF
+    "Monday":    [4, 6, 8, 10],
+    "Tuesday":   [12, 14, 16, 18],
+    "Wednesday": [20, 22, 24, 26],
+    "Thursday":  [28, 30, 32, 34],
+    "Friday":    [36, 38, 40, 42],
+    "Saturday":  [44, 46, 48, 50],
+    "Sunday":    [52, 54, 56, 58],
 }
 DC_TRANS_DAY_RANGES = {
     "Monday": (4, 11), "Tuesday": (12, 19), "Wednesday": (20, 27),
@@ -94,13 +94,13 @@ DC_TRANS_DAY_RANGES = {
 }
 
 DJR_TRANS_CONTENT_COLS = {
-    "Monday":    [4, 6, 8, 10],    # D, F, H, J
-    "Tuesday":   [11, 13, 15, 17], # K, M, O, Q
-    "Wednesday": [18, 20, 21, 23], # R, T, U, W
-    "Thursday":  [24, 26, 27, 29], # X, Z, AA, AC
-    "Friday":    [30, 32, 33, 35], # AD, AF, AG, AI
-    "Saturday":  [36, 38, 39, 41], # AJ, AL, AM, AO
-    "Sunday":    [42, 44, 45, 47], # AP, AR, AS, AU
+    "Monday":    [4, 6, 8, 10],
+    "Tuesday":   [11, 13, 15, 17],
+    "Wednesday": [18, 20, 21, 23],
+    "Thursday":  [24, 26, 27, 29],
+    "Friday":    [30, 32, 33, 35],
+    "Saturday":  [36, 38, 39, 41],
+    "Sunday":    [42, 44, 45, 47],
 }
 DJR_TRANS_DAY_RANGES = {
     "Monday": (4, 10), "Tuesday": (11, 17), "Wednesday": (18, 23),
@@ -145,16 +145,8 @@ def find_translation_template(is_djr: bool) -> Optional[str]:
 
 
 def _set_cell_keep_merge(
-    ws,
-    row: int,
-    col: int,
-    value,
-    alignment=None,
-    number_format: Optional[str] = None,
-    font=None,
-    fill=None,
+    ws, row: int, col: int, value, alignment=None, number_format: Optional[str] = None, font=None, fill=None
 ):
-    """Escribe en la celda superior izquierda sin destruir los merged_cells existentes."""
     cell = ws.cell(row=row, column=col)
     if isinstance(cell, Cell):
         cell.value = value
@@ -169,7 +161,6 @@ def _set_cell_keep_merge(
 
 
 def _ensure_merged_range(ws, min_row: int, min_col: int, max_row: int, max_col: int):
-    """Descombina cualquier rango solapado antes de combinar, evitando XML corrupto en Excel."""
     target_str = f"{get_column_letter(min_col)}{min_row}:{get_column_letter(max_col)}{max_row}"
     for r in list(ws.merged_cells.ranges):
         if str(r) == target_str:
@@ -206,17 +197,9 @@ def _get_smart_slots(day_name: str, programming_count: int, mediaplanning_count:
 
 
 def _populate_translation_calendar(
-    wb,
-    is_djr: bool,
-    country: str,
-    clean_country: str,
-    country_code: str,
-    records: list,
-    channel_id_to_name_map: Optional[dict],
-    month_str: str,
-    target_year: Optional[int],
-    target_month: Optional[int],
-    first_monday: Optional[date],
+    wb, is_djr: bool, country: str, clean_country: str, country_code: str,
+    records: list, channel_id_to_name_map: Optional[dict], month_str: str,
+    target_year: Optional[int], target_month: Optional[int], first_monday: Optional[date]
 ):
     is_italy = "ital" in country.lower()
     display_country_title = "ITALY" if is_italy else "MENA"
@@ -234,7 +217,6 @@ def _populate_translation_calendar(
         month_name_upper = month_name_from_records(records or []).upper() if records else "MONTH"
         month_abbr = month_name_upper.capitalize()[:3]
 
-    # 1. Actualizar Highlights sin romper merges
     for sn in wb.sheetnames:
         if "highlights" in sn.lower():
             ws_hi = wb[sn]
@@ -246,27 +228,25 @@ def _populate_translation_calendar(
                     if isinstance(cell, Cell) and isinstance(cell.value, str) and "EMEA" in cell.value:
                         cell.value = cell.value.replace("EMEA", country_code)
 
-    # 2. Actualizar FULL CALENDAR
     fc_sheet = djr_sheet_name if is_djr else dc_sheet_name
     if fc_sheet not in wb.sheetnames:
         return
     ws = wb[fc_sheet]
 
-    # Capturar los rellenos nativos de fecha y deadline antes de tocar celdas
     ref_date_row = 7 if is_djr else 222
     ref_dl_row = 8 if is_djr else 223
     in_month_date_fill = copy(ws.cell(row=ref_date_row, column=4).fill)
     in_month_dl_fill = copy(ws.cell(row=ref_dl_row, column=4).fill)
 
     brand_full = "DISNEY JUNIOR" if is_djr else "DISNEY CHANNEL"
-    end_header_col = 47 if is_djr else 54  # AU=47 en DJR, BB=54 en DC
+    end_header_col = 47 if is_djr else 54
     _ensure_merged_range(ws, 1, 2, 2, end_header_col)
     _ensure_merged_range(ws, 3, 2, 4, end_header_col)
 
     _set_cell_keep_merge(ws, 1, 2, f"{brand_full} YOUTUBE {display_country_title} CALENDAR", alignment=center_wrap())
     if is_djr:
         if target_year and target_month:
-            _set_cell_keep_merge(ws, 3, 2, date(target_year, target_month, 1), alignment=center_wrap(), number_format="mmm-yy")
+            _set_cell_keep_merge(ws, 3, 2, date(target_year, target_month, 1), alignment=center_wrap(), number_format="[$-409]mmm-yy")
     else:
         _set_cell_keep_merge(ws, 3, 2, month_name_upper, alignment=center_wrap())
 
@@ -412,7 +392,6 @@ def _populate_translation_calendar(
                         cell.value = None
 
                 if not in_month:
-                    # Días fuera de mes: gris en TODAS las filas incluyendo fecha (r_date) y deadline (r_dl)
                     for r_shade in (r_date, r_dl, r_owner, r_prop, r_ctype, r_title, r_syn, r_strat, r_country):
                         ws.cell(row=r_shade, column=c).fill = copy(fill_out_month)
                     if is_trans:
@@ -421,7 +400,6 @@ def _populate_translation_calendar(
                             c_own_out.value = lang_header
                         c_own_out.alignment = center_wrap()
                 else:
-                    # Días dentro del mes: restaurar color nativo en fecha (r_date) y deadline (r_dl)
                     ws.cell(row=r_date, column=c).fill = copy(in_month_date_fill)
                     ws.cell(row=r_dl, column=c).fill = copy(in_month_dl_fill)
                     if is_trans:
@@ -518,7 +496,6 @@ def _populate_translation_calendar(
             cell.fill = PatternFill(fill_type=None)
             cell.border = Border()
 
-    # 3. Actualizar MONTHLY OVERVIEW local y su cabecera
     if records:
         if is_djr:
             from exporters.monthly_overview_djr import populate_monthly_overview_djr
@@ -545,7 +522,6 @@ def _populate_translation_calendar(
                 alignment=center_wrap(),
             )
 
-    # 4. Renombrar todas las pestañas usando códigos cortos (<= 31 chars)
     for sn in list(wb.sheetnames):
         if "highlights" in sn.lower():
             wb[sn].title = f"YT {'DJR' if is_djr else 'DC'} {country_code} {month_abbr} Highlights"[:31]
@@ -659,7 +635,6 @@ def generate_local_calendars(
 
         is_translation_market = any(k in c_lower for k in ["middle east", "mena", "italy", "italia"])
 
-        # === RAMA A: MERCADOS CON COLUMNAS DE TRADUCCIÓN (MENA E ITALIA) ===
         if is_translation_market and translation_tpl_path:
             country_wb = load_workbook(translation_tpl_path, data_only=False)
             _populate_translation_calendar(
@@ -683,7 +658,6 @@ def generate_local_calendars(
             generated_files.append(output_path)
             continue
 
-        # === RAMA B: RESTO DE PAÍSES (INCLUYENDO ESPAÑA / TIER S & TIER A) ===
         country_wb = load_workbook(master_path, data_only=False)
 
         for sn in list(country_wb.sheetnames):
@@ -732,7 +706,6 @@ def generate_local_calendars(
                     channel_id_to_name_map=channel_id_to_name_map, target_country=clean_country,
                 )
 
-        # ---------------- LÓGICA DISNEY JUNIOR ----------------
         if is_djr:
             country_idx = next((i for i, mc in enumerate(master_countries) if mc.lower() == country.lower()), -1)
             if country_idx == -1:
@@ -811,7 +784,6 @@ def generate_local_calendars(
                         format_israel_tx_tc(ws, israel_tc, is_tx=False)
                         safe_rows.add(israel_tc)
 
-        # ---------------- LÓGICA DISNEY CHANNEL ----------------
         else:
             if not dc_blocks:
                 country_wb.close()
@@ -901,7 +873,6 @@ def generate_local_calendars(
                     cell.fill = PatternFill(fill_type=None)
                     cell.border = Border()
 
-        # ---------------- LA GUILLOTINA LÁSER ----------------
         rows_to_hide_and_clear = set()
         in_junk_section = False
         country_names_lower = [c.lower() for c in master_countries]
@@ -1006,7 +977,6 @@ def generate_local_calendars(
             if "total vod" in c_val:
                 ws.column_dimensions[get_column_letter(c)].hidden = True
 
-        # --- REEMPLAZO DE NOMBRES EMEA -> COUNTRY CODE (<= 31 CHARS) ---
         for sn in country_wb.sheetnames:
             ws_tmp = country_wb[sn]
             for r in range(1, 15):

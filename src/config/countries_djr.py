@@ -31,21 +31,21 @@ DJR_REGION_PRESETS = {
     "tier a": {
         "France",
         "GSA (German)",
-        "Italy",
         "Middle East (Arabic)",
         "Poland",
         "Spain",
+        "Portugal",  # Añadido
     },
     "tier b": {
         "Bulgaria",
         "Greece",
         "Israel (Hebrew)",
         "Netherlands (Dutch)",
-        "Portugal",
         "Romania",
         "Türkiye",
     },
     "tier c": {
+        "Italy",  # Movido a Tier C
         "Sweden (Swedish)",
         "Denmark (Danish)",
         "Norway",
@@ -53,21 +53,21 @@ DJR_REGION_PRESETS = {
     "a": {
         "France",
         "GSA (German)",
-        "Italy",
         "Middle East (Arabic)",
         "Poland",
         "Spain",
+        "Portugal",  # Añadido
     },
     "b": {
         "Bulgaria",
         "Greece",
         "Israel (Hebrew)",
         "Netherlands (Dutch)",
-        "Portugal",
         "Romania",
         "Türkiye",
     },
     "c": {
+        "Italy",  # Movido a Tier C
         "Sweden (Swedish)",
         "Denmark (Danish)",
         "Norway",
